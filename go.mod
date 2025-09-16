@@ -1,6 +1,6 @@
-module example.com/hello
+module github.com/se-tim/lattigo-tests
 
-go 1.25.0
+go 1.22
 
 require github.com/tuneinsight/lattigo/v6 v6.1.1
 

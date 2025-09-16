@@ -17,8 +17,8 @@ import (
 func main() {
 	// Parameters
 	
-	LogN := 14
-	LogSlots := 13
+	LogN := 16
+	LogSlots := 14
 	LogDefaultScale := 45
 
 	q0 := []int{56}
@@ -134,6 +134,4 @@ func main() {
 	encoder.Decode(decryptor.DecryptNew(ct), myBootVector)
 	precStats := ckks.GetPrecisionStats(params, encoder, nil, myVector, myBootVector, 0, false)
 	fmt.Println(precStats.String())
-
-	fmt.Printf("eval.CoeffsToSlotsParameters.LogSlots = %d\n", eval.CoeffsToSlotsParameters.LogSlots)
 }
