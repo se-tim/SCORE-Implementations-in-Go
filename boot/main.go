@@ -17,8 +17,8 @@ import (
 func main() {
 	// Parameters
 	
-	LogN := 16
-	LogSlots := 14
+	LogN := 12
+	LogSlots := 11
 	LogDefaultScale := 45
 
 	q0 := []int{56}
