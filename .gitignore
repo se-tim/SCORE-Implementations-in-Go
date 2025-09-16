@@ -1,0 +1,8 @@
+/*.pdf
+*.synctex.gz
+*.nav
+*.snm
+*.bbl
+*.aux
+*.DS_Store
+*.vscode
