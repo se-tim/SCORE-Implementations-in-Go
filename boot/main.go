@@ -16,16 +16,34 @@ import (
 
 func main() {
 	// Parameters
+	// 128-bit security with LogPQ <= 1200 for LogN = 16
 	
-	LogN := 12
-	LogSlots := 11
+	LogN := 16
+	LogNumSlots := LogN - 1
 	LogDefaultScale := 45
+	numLevelsAfterBoot := 1
 
 	q0 := []int{56}
-	qiAfterBoot := []int{LogDefaultScale}
-	qiSlotsToCoeffs := []int{39, 39, 39}
+	qiAfterBoot := make([]int, numLevelsAfterBoot)
+	for i := range qiAfterBoot {
+		qiAfterBoot[i] = LogDefaultScale
+	}
+	var qiSlotsToCoeffs, qiCoeffsToSlots []int
+	switch {
+	case LogNumSlots >= 14:
+		qiSlotsToCoeffs = []int{39, 39, 39}
+		qiCoeffsToSlots = []int{56, 56, 56}
+	case LogNumSlots >= 9:
+		qiSlotsToCoeffs = []int{39, 39}
+		qiCoeffsToSlots = []int{56, 56, 56}
+	case LogNumSlots >= 6:
+		qiSlotsToCoeffs = []int{39}
+		qiCoeffsToSlots = []int{56, 56}
+	default:
+		qiSlotsToCoeffs = []int{39}
+		qiCoeffsToSlots = []int{56}
+	}
 	qiEvalMod := []int{60, 60, 60, 60, 60, 60, 60, 60}
-	qiCoeffsToSlots := []int{56, 56, 56, 56} // Larger primes because of q-terms, more primes to make operation faster (is at higher modulus)
 	LogP := []int{61, 61, 61, 61, 61}
 
 	LogQ := append(q0, qiAfterBoot...)
@@ -45,7 +63,8 @@ func main() {
 
 	SlotsToCoeffsParameters := dft.MatrixLiteral{
 		Type: dft.HomomorphicDecode,
-		LogSlots: LogSlots,
+		Format: dft.Standard,
+		LogSlots: LogNumSlots,
 		LevelQ: len(qiSlotsToCoeffs),
 		LevelP: params.MaxLevelP(),
 		LogBSGSRatio: 1,
@@ -58,7 +77,7 @@ func main() {
 	CoeffsToSlotsParameters := dft.MatrixLiteral{
 		Type: dft.HomomorphicEncode,
 		Format: dft.Standard,
-		LogSlots: LogSlots,
+		LogSlots: LogNumSlots,
 		LevelQ: params.MaxLevelQ(),
 		LevelP: params.MaxLevelP(),
 		LogBSGSRatio: 1,
@@ -89,7 +108,7 @@ func main() {
 		CircuitOrder: bootstrapping.DecodeThenModUp,
 	}
 
-	fmt.Printf("logQP = %d\n", int(math.Round(float64(btpParams.BootstrappingParameters.LogQP()))))
+	fmt.Printf("LogN = %d, LogNumSlots = %d, LogPQ = %d, numLevelsAfterBoot = %d\n", LogN, LogNumSlots, int(math.Round(float64(btpParams.BootstrappingParameters.LogQP()))), numLevelsAfterBoot)
 
 	kgen := rlwe.NewKeyGenerator(params)
 	sk, pk := kgen.GenKeyPairNew()
@@ -101,7 +120,7 @@ func main() {
 
 	// Encrypt
 
-	myVector := make([]complex128, 1<<LogSlots)
+	myVector := make([]complex128, 1<<LogNumSlots)
 	for i := range myVector {myVector[i] = sampling.RandComplex128(-1, 1)}
 	myPoly := ckks.NewPlaintext(params, len(qiSlotsToCoeffs)) // Encrypt at lowest possible level
 	encoder.Encode(myVector, myPoly)
@@ -113,8 +132,9 @@ func main() {
 	start := time.Now()
 
 	ct, _ = eval.SlotsToCoeffs(ct, nil)
+	eval.Evaluator.Mul(ct, 1<<uint(LogN-1-LogNumSlots), ct) // Multiply by N / (2 * NumSlots)
 	ct, _, _ = eval.ScaleDown(ct) // Ensure the right gap between modulus and message
-	ct, _ = eval.ModUp(ct)
+	ct, _ = eval.ModUp(ct) // Includes trace and division by N / ( 2 * NumSlots)
 	ct, _, _ = eval.CoeffsToSlots(ct)
 	ct_conj, _ := eval.Evaluator.ConjugateNew(ct)
 	real, _ := eval.Evaluator.AddNew(ct, ct_conj)
@@ -126,7 +146,7 @@ func main() {
 	eval.Evaluator.Add(real, imag, ct)
 
 	elapsed := time.Since(start)
-	fmt.Printf("Bootstrapping time: %v\n", elapsed.Round(time.Millisecond))
+	fmt.Printf("Bootstrapping time: %v", elapsed.Round(time.Millisecond))
 
 	// Check
 
