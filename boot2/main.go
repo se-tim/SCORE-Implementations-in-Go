@@ -19,37 +19,22 @@ func main() {
 	// 128-bit security with LogPQ <= 1200 for LogN = 16
 	
 	LogN := 16
-	LogNumSlots := LogN - 1
-	LogDefaultScale := 45
+	LogNumSlots := 15
+	LogDefaultScale := 40
 	numLevelsAfterBoot := 1
 
-	q0 := []int{56}
+	q0 := []int{55}
 	qiAfterBoot := make([]int, numLevelsAfterBoot)
-	for i := range qiAfterBoot {
-		qiAfterBoot[i] = LogDefaultScale
-	}
-	var qiSlotsToCoeffs, qiCoeffsToSlots []int
-	switch {
-	case LogNumSlots >= 14:
-		qiSlotsToCoeffs = []int{39, 39, 39}
-		qiCoeffsToSlots = []int{56, 56, 56}
-	case LogNumSlots >= 9:
-		qiSlotsToCoeffs = []int{39, 39}
-		qiCoeffsToSlots = []int{56, 56, 56}
-	case LogNumSlots >= 6:
-		qiSlotsToCoeffs = []int{39}
-		qiCoeffsToSlots = []int{56, 56}
-	default:
-		qiSlotsToCoeffs = []int{39}
-		qiCoeffsToSlots = []int{56}
-	}
+	for i := range qiAfterBoot {qiAfterBoot[i] = LogDefaultScale}
+	qiCoeffsToSlots := []int{39, 39, 39}
 	qiEvalMod := []int{60, 60, 60, 60, 60, 60, 60, 60}
+	qiSlotsToCoeffs := []int{56, 56, 56, 56}
 	LogP := []int{61, 61, 61, 61, 61}
 
 	LogQ := append(q0, qiAfterBoot...)
+	LogQ = append(LogQ, qiCoeffsToSlots...)
 	LogQ = append(LogQ, qiSlotsToCoeffs...)
 	LogQ = append(LogQ, qiEvalMod...)
-	LogQ = append(LogQ, qiCoeffsToSlots...)
 
 	// Precomputations
 
@@ -61,19 +46,6 @@ func main() {
 		Xs: ring.Ternary{H: 192},
 	})
 
-	SlotsToCoeffsParameters := dft.MatrixLiteral{
-		Type: dft.HomomorphicDecode,
-		Format: dft.Standard,
-		LogSlots: LogNumSlots,
-		LevelQ: len(qiSlotsToCoeffs),
-		LevelP: params.MaxLevelP(),
-		LogBSGSRatio: 1,
-		Levels: make([]int, len(qiSlotsToCoeffs)),
-	}
-	for i := range SlotsToCoeffsParameters.Levels {
-		SlotsToCoeffsParameters.Levels[i] = 1
-	}
-
 	CoeffsToSlotsParameters := dft.MatrixLiteral{
 		Type: dft.HomomorphicEncode,
 		Format: dft.Standard,
@@ -83,9 +55,7 @@ func main() {
 		LogBSGSRatio: 1,
 		Levels: make([]int, len(qiCoeffsToSlots)),
 	}
-	for i := range CoeffsToSlotsParameters.Levels {
-		CoeffsToSlotsParameters.Levels[i] = 1
-	}
+	for i := range CoeffsToSlotsParameters.Levels {CoeffsToSlotsParameters.Levels[i] = 1}
 
 	Mod1ParametersLiteral := mod1.ParametersLiteral{
 		LevelQ: params.MaxLevel() - len(qiCoeffsToSlots),
@@ -98,6 +68,17 @@ func main() {
 		Mod1InvDegree: 0,
 	}
 
+	SlotsToCoeffsParameters := dft.MatrixLiteral{
+		Type: dft.HomomorphicDecode,
+		Format: dft.Standard,
+		LogSlots: LogNumSlots,
+		LevelQ: len(qiSlotsToCoeffs) + numLevelsAfterBoot,
+		LevelP: params.MaxLevelP(),
+		LogBSGSRatio: 1,
+		Levels: make([]int, len(qiSlotsToCoeffs)),
+	}
+	for i := range SlotsToCoeffsParameters.Levels {SlotsToCoeffsParameters.Levels[i] = 1}
+
 	btpParams := bootstrapping.Parameters{
 		ResidualParameters: params,
 		BootstrappingParameters: params,
@@ -105,7 +86,7 @@ func main() {
 		Mod1ParametersLiteral: Mod1ParametersLiteral,
 		CoeffsToSlotsParameters: CoeffsToSlotsParameters,
 		EphemeralSecretWeight: 32,
-		CircuitOrder: bootstrapping.DecodeThenModUp,
+		CircuitOrder: bootstrapping.ModUpThenEncode,
 	}
 
 	fmt.Printf("LogN = %d, LogNumSlots = %d, LogPQ = %d, numLevelsAfterBoot = %d\n", LogN, LogNumSlots, int(math.Round(float64(btpParams.BootstrappingParameters.LogQP()))), numLevelsAfterBoot)
@@ -122,7 +103,7 @@ func main() {
 
 	myVector := make([]complex128, 1<<LogNumSlots)
 	for i := range myVector {myVector[i] = sampling.RandComplex128(-1, 1)}
-	myPoly := ckks.NewPlaintext(params, len(qiSlotsToCoeffs)) // Encrypt at lowest possible level
+	myPoly := ckks.NewPlaintext(params, 0) // Encrypt at lowest possible level
 	encoder.Encode(myVector, myPoly)
 	ct, _ := encryptor.EncryptNew(myPoly)
 	encoder.Decode(decryptor.DecryptNew(ct), myVector) // Include encryption error in myVector
@@ -131,24 +112,22 @@ func main() {
 
 	start := time.Now()
 
-	ct, _ = eval.SlotsToCoeffs(ct, nil)
-	eval.Evaluator.Mul(ct, 1<<uint(LogN-1-LogNumSlots), ct) // Multiply by N / (2 * NumSlots)
 	ct, _, _ = eval.ScaleDown(ct) // Ensure the right gap between modulus and message
 	ct, _ = eval.ModUp(ct) // Includes trace and division by N / ( 2 * NumSlots)
 	ct, _, _ = eval.CoeffsToSlots(ct)
 	ct_conj, _ := eval.Evaluator.ConjugateNew(ct)
 	real, _ := eval.Evaluator.AddNew(ct, ct_conj)
 	imag, _ := eval.Evaluator.SubNew(ct, ct_conj)
-	eval.Evaluator.Mul(imag, -1i, imag)
+	eval.Evaluator.Mul(imag, -1i, imag) 
 	real, _ = eval.EvalModAndScale(real, 0.5)
 	imag, _ = eval.EvalModAndScale(imag, 0.5)
-	eval.Evaluator.Mul(imag, 1i, imag)
-	eval.Evaluator.Add(real, imag, ct)
-
+	ct, _ = eval.SlotsToCoeffs(real, imag)
+	eval.Evaluator.Mul(ct, 1<<uint(LogN-1-LogNumSlots), ct) // Multiply by N / (2 * NumSlots)
+	
 	elapsed := time.Since(start)
 	fmt.Printf("Bootstrapping time: %v", elapsed.Round(time.Millisecond))
 
-	// Check
+	// // Check
 
 	myBootVector := make([]complex128, ct.Slots())
 	encoder.Decode(decryptor.DecryptNew(ct), myBootVector)
