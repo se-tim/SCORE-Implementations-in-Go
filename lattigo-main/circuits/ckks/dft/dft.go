@@ -226,7 +226,9 @@ func NewMatrixFromLiteral(params ckks.Parameters, d MatrixLiteral, encoder *ckks
 func (eval *Evaluator) CoeffsToSlotsNew(ctIn *rlwe.Ciphertext, ctsMatrices Matrix) (ctReal, ctImag *rlwe.Ciphertext, err error) {
 	ctReal = ckks.NewCiphertext(eval.parameters, 1, ctsMatrices.LevelQ)
 
-	ctImag = ckks.NewCiphertext(eval.parameters, 1, ctsMatrices.LevelQ)
+	if ctsMatrices.LogSlots == eval.parameters.LogMaxSlots() {
+		ctImag = ckks.NewCiphertext(eval.parameters, 1, ctsMatrices.LevelQ)
+	}
 
 	return ctReal, ctImag, eval.CoeffsToSlots(ctIn, ctsMatrices, ctReal, ctImag)
 }
@@ -271,6 +273,17 @@ func (eval *Evaluator) CoeffsToSlots(ctIn *rlwe.Ciphertext, ctsMatrices Matrix, 
 		// Real part
 		if err = eval.Add(ctReal, zV, ctReal); err != nil {
 			return fmt.Errorf("cannot CoeffsToSlots: %w", err)
+		}
+
+		// If repacking, then ct0 and ct1 right n/2 slots are zero.
+		if ctsMatrices.Format == RepackImagAsReal && ctsMatrices.LogSlots < eval.parameters.LogMaxSlots() {
+			if err = eval.Rotate(tmp, 1<<ctIn.LogDimensions.Cols, tmp); err != nil {
+				return fmt.Errorf("cannot CoeffsToSlots: %w", err)
+			}
+
+			if err = eval.Add(ctReal, tmp, ctReal); err != nil {
+				return fmt.Errorf("cannot CoeffsToSlots: %w", err)
+			}
 		}
 
 		zV = nil
