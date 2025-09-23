@@ -1,3 +1,5 @@
+// SlotsToCoeffs-first approach
+
 package main
 
 import (
@@ -88,7 +90,7 @@ func main() {
 		Mod1Degree: 30,
 		DoubleAngle: 3,
 		K: 16,
-		LogMessageRatio: 10, // Gap between modulus and message
+		LogMessageRatio: 5, // Gap between modulus and message
 		Mod1InvDegree: 0,
 	}
 
