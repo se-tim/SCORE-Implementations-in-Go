@@ -16,12 +16,13 @@ import (
 )
 
 func main() {
-	LogN := 12 // Ring degree
+	// Parameters
 
-	LogNumSlots := 11 // Number of slots
-	numLevelsAfterBoot := 10 // Number of levels left after bootstrapping
-	H := 192 // Long-term secret weight
-	h := 32 // Ephemeral secret weight
+	LogN := 10
+	LogNumSlots := 7
+	numLevelsAfterBoot := 10
+	longTermSecretWeight := 192
+	ephemeralSecretWeight := 32
 
 	LogDefaultScale := 40
 	q0 := []int{55}
@@ -42,7 +43,7 @@ func main() {
 		LogQ: LogQ,
 		LogP: LogP,
 		LogDefaultScale: LogDefaultScale,
-		Xs: ring.Ternary{H: H},
+		Xs: ring.Ternary{H: longTermSecretWeight},
 	})
 
 	CoeffsToSlotsParameters := dft.MatrixLiteral{
@@ -64,7 +65,7 @@ func main() {
 		Mod1Degree: 30,
 		DoubleAngle: 3,
 		K: 16,
-		LogMessageRatio: 24 - params.LogN(),
+		LogMessageRatio: 24 - 2 * LogN + LogNumSlots,
 		Mod1InvDegree: 0,
 	}
 
@@ -86,16 +87,11 @@ func main() {
 		SlotsToCoeffsParameters: SlotsToCoeffsParameters,
 		Mod1ParametersLiteral: Mod1ParametersLiteral,
 		CoeffsToSlotsParameters: CoeffsToSlotsParameters,
-		EphemeralSecretWeight: h,
+		EphemeralSecretWeight: ephemeralSecretWeight,
 		CircuitOrder: bootstrapping.ModUpThenEncode,
 	}
 
-
-
-
-
-
-	// Setup
+	// Key generation
 	
 	kgen := rlwe.NewKeyGenerator(params)
 	sk, pk := kgen.GenKeyPairNew()
@@ -108,18 +104,19 @@ func main() {
 
 	// Test
 
-	myVector := make([]complex128, params.MaxSlots())
+	myVector := make([]complex128, 1<<LogNumSlots)
 	for i := range myVector {myVector[i] = sampling.RandComplex128(-1, 1)}
-	plaintext := ckks.NewPlaintext(params, 0)
-	encoder.Encode(myVector, plaintext)
-
-	ct, _ := encryptor.EncryptNew(plaintext)
+	myPoly := ckks.NewPlaintext(params, 0)
+	encoder.Encode(myVector, myPoly)
+	ct, _ := encryptor.EncryptNew(myPoly)
+	
 	ct, _, _ = eval.ScaleDown(ct)
 	ct, _ = eval.ModUp(ct)
 	ctReal, ctImag, _ := eval.CoeffsToSlots(ct)
 	ctReal, _ = eval.EvalMod(ctReal)
-	if ctImag != nil {ctImag, _ = eval.EvalMod(ctImag)}
+	ctImag, _ = eval.EvalMod(ctImag)
 	ct, _ = eval.SlotsToCoeffs(ctReal, ctImag)
+	eval.Evaluator.Mul(ct, 1<<uint(LogN-1-LogNumSlots), ct)
 
 	// Check
 
