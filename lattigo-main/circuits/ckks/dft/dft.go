@@ -82,7 +82,14 @@ type MatrixLiteral struct {
 	Scaling      *big.Float // Default 1.0.
 	BitReversed  bool       // Default: False.
 	LogBSGSRatio int        // Default: 0.
+
+	SCORE *SCOREOptions     // Whether the matrix is used in the SCORE procedure (only for HomomorphicDecode).
 }
+
+type SCOREOptions struct {
+	DecodeHalfScale bool
+}
+
 
 // Depth returns the number of levels allocated to the linear transform.
 // If actual == true then returns the number of moduli consumed, else
@@ -293,6 +300,36 @@ func (eval *Evaluator) CoeffsToSlots(ctIn *rlwe.Ciphertext, ctsMatrices Matrix, 
 			return fmt.Errorf("cannot CoeffsToSlots: %w", err)
 		}
 	}
+
+	return
+}
+
+// For an encrypted real vector ctIn, SCORE scales the first encrypted entry by 1/2,
+// then applies SlotsToCoeffs, and then conjugates the result and adds it to itself.
+func (eval *Evaluator) SCORENew(ctIn *rlwe.Ciphertext, SCOREMatrices Matrix) (ctOut *rlwe.Ciphertext, err error) {
+
+	ctOut = ckks.NewCiphertext(eval.parameters, 1, SCOREMatrices.LevelQ)
+	return ctOut, eval.SCORE(ctIn, SCOREMatrices, ctOut)
+}
+
+// See explanation in SCORENew.
+func (eval *Evaluator) SCORE(ctIn *rlwe.Ciphertext, SCOREMatrices Matrix, ctOut *rlwe.Ciphertext) (err error) {
+
+	ct := ctIn.CopyNew()
+
+	if err = eval.dft(ctIn, SCOREMatrices.Matrices, ct); err != nil {
+		return fmt.Errorf("cannot SCORE: %w", err)
+	}
+
+	if err = eval.Conjugate(ct, ctOut); err != nil {
+		return fmt.Errorf("cannot SCORE: %w", err)
+	}
+	
+	if err = eval.Add(ctOut, ct, ctOut); err != nil {
+		return fmt.Errorf("cannot SCORE: %w", err)
+	}
+
+	ct = nil
 
 	return
 }
@@ -764,6 +801,19 @@ func (d MatrixLiteral) GenMatrices(LogN int, prec uint) (plainVector []ltcommon.
 				v[i][0].Mul(v[i][0], scaling)
 				v[i][1].Mul(v[i][1], scaling)
 			}
+		}
+	}
+
+	// First column of first DFT matrix scaled by 1/2
+	if ltType == HomomorphicDecode && d.SCORE != nil && d.SCORE.DecodeHalfScale {
+		A := plainVector[0]
+		n := len(A[0])
+		for x := range A {
+			v := A[x]
+			y := n - x
+			if y >= n {y = 0}
+			v[y][0].Mul(v[y][0], big.NewFloat(0.5))
+			v[y][1].Mul(v[y][1], big.NewFloat(0.5))
 		}
 	}
 

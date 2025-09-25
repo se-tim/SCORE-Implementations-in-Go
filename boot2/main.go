@@ -5,6 +5,7 @@ package main
 import (
 	"fmt"
 	"math"
+	"time"
 
 	"github.com/tuneinsight/lattigo/v6/circuits/ckks/bootstrapping"
 	"github.com/tuneinsight/lattigo/v6/circuits/ckks/dft"
@@ -18,8 +19,8 @@ import (
 func main() {
 	// Parameters
 
-	LogN := 10
-	LogNumSlots := 7
+	LogN := 12
+	LogNumSlots := LogN - 1
 	numLevelsAfterBoot := 10
 	longTermSecretWeight := 192
 	ephemeralSecretWeight := 32
@@ -105,18 +106,19 @@ func main() {
 	// Test
 
 	myVector := make([]complex128, 1<<LogNumSlots)
-	for i := range myVector {myVector[i] = sampling.RandComplex128(-1, 1)}
+	for i := range myVector {myVector[i] = complex(sampling.RandFloat64(-1, 1), 0)}
 	myPoly := ckks.NewPlaintext(params, 0)
 	encoder.Encode(myVector, myPoly)
 	ct, _ := encryptor.EncryptNew(myPoly)
 	
+	start := time.Now()
 	ct, _, _ = eval.ScaleDown(ct)
 	ct, _ = eval.ModUp(ct)
-	ctReal, ctImag, _ := eval.CoeffsToSlots(ct)
+	ctReal, _, _ := eval.CoeffsToSlots(ct)
 	ctReal, _ = eval.EvalMod(ctReal)
-	ctImag, _ = eval.EvalMod(ctImag)
-	ct, _ = eval.SlotsToCoeffs(ctReal, ctImag)
-	eval.Evaluator.Mul(ct, 1<<uint(LogN-1-LogNumSlots), ct)
+	ct, _ = eval.SCORE(ctReal)
+	eval.Mul(ct, 1<<uint(LogN-1-LogNumSlots), ct) // Multiply by N / (2 * NumSlots)
+	elapsed := time.Since(start)
 
 	// Check
 
@@ -124,6 +126,7 @@ func main() {
 	encoder.Decode(decryptor.DecryptNew(ct), myBootVector)
 	precStats := ckks.GetPrecisionStats(params, encoder, nil, myVector, myBootVector, 0, false)
 	fmt.Println(precStats.String())
-	fmt.Printf("myVector = [%f, ...]\n", myVector[0])
-	fmt.Printf("myBootVector = [%f, ...]\n", myBootVector[0])
+	fmt.Printf("myVector = [%f, %f, ...]\n", real(myVector[0]), real(myVector[1]))
+	fmt.Printf("myBootVector = [%f, %f, ...]\n", real(myBootVector[0]), real(myBootVector[1]))
+	fmt.Printf("Bootstrapping took %s\n", elapsed)
 }

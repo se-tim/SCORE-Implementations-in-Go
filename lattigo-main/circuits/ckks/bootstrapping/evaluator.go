@@ -40,6 +40,7 @@ type Evaluator struct {
 	Mod1Parameters mod1.Parameters
 	S2CDFTMatrix   dft.Matrix
 	C2SDFTMatrix   dft.Matrix
+	SCOREMatrix    dft.Matrix
 
 	SkDebug *rlwe.SecretKey
 
@@ -207,6 +208,12 @@ func (eval *Evaluator) initialize(btpParams Parameters) (err error) {
 	}
 
 	if eval.S2CDFTMatrix, err = dft.NewMatrixFromLiteral(params, eval.SlotsToCoeffsParameters, encoder); err != nil {
+		return
+	}
+
+	scoreLit := eval.SlotsToCoeffsParameters
+	scoreLit.SCORE = &dft.SCOREOptions{DecodeHalfScale: true}
+	if eval.SCOREMatrix, err = dft.NewMatrixFromLiteral(params, scoreLit, encoder); err != nil {
 		return
 	}
 
@@ -793,6 +800,10 @@ func (eval Evaluator) EvalModAndScale(ctIn *rlwe.Ciphertext, scaling complex128)
 
 	ctOut.Scale = eval.BootstrappingParameters.DefaultScale()
 	return
+}
+
+func (eval Evaluator) SCORE(ctIn *rlwe.Ciphertext) (*rlwe.Ciphertext, error) {
+    return eval.DFTEvaluator.SCORENew(ctIn, eval.SCOREMatrix)
 }
 
 func (eval Evaluator) SlotsToCoeffs(ctReal, ctImag *rlwe.Ciphertext) (ctOut *rlwe.Ciphertext, err error) {

@@ -20,7 +20,7 @@ func main() {
 	// Parameters
 	// 128-bit security with LogPQ <= 1200 for LogN = 16
 	
-	LogN := 16
+	LogN := 12
 	LogNumSlots := LogN - 1
 	LogDefaultScale := 45
 	numLevelsAfterBoot := 1
@@ -128,7 +128,7 @@ func main() {
 	start := time.Now()
 
 	ct, _ = eval.SlotsToCoeffs(ct, nil)
-	eval.Evaluator.Mul(ct, 1<<uint(LogN-1-LogNumSlots), ct) // Multiply by N / (2 * NumSlots)
+	eval.Mul(ct, 1<<uint(LogN-1-LogNumSlots), ct) // Multiply by N / (2 * NumSlots)
 	ct, _, _ = eval.ScaleDown(ct) // Ensure the right gap between modulus and message
 	ct, _ = eval.ModUp(ct) // Includes trace and division by N / ( 2 * NumSlots)
 	ct, _, _ = eval.CoeffsToSlots(ct)
