@@ -1,10 +1,11 @@
 package main
 
 import (
+	"flag"
 	"fmt"
-	"math"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/tuneinsight/lattigo/v6/circuits/ckks/bootstrapping"
@@ -16,16 +17,31 @@ import (
 	"github.com/tuneinsight/lattigo/v6/utils/sampling"
 )
 
+type runResult struct {
+    timeScaleDown float64
+    timeModUp float64
+    timeCTS float64
+    timeEvalModRe float64
+    timeEvalModIm float64
+    timeSTC float64
+    timeSCORE float64
+    timeBoot float64
+    prec float64
+}
+
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	// Parameters
+	numBootRunsFlag := flag.Int("numBootRuns", 8, "number of bootstrap runs")
+	logNFlag := flag.Int("logN", 12, "log2 of ring degree N")
+	levelsAfterBootFlag := flag.Int("levelsAfterBoot", 3, "levels after bootstrapping")
+	flag.Parse()
 
-	LogN := 16
-	numLevelsAfterBoot := 7
+	numBootRuns := *numBootRunsFlag
+	LogN := *logNFlag
+	numLevelsAfterBoot := *levelsAfterBootFlag
 	longTermSecretWeight := 192
 	ephemeralSecretWeight := 32
-	numBootRuns := 5
 
 	LogDefaultScale := 40
 	q0 := []int{55}
@@ -40,6 +56,18 @@ func main() {
 	LogQ = append(LogQ, qiSlotsToCoeffs...)
 	LogQ = append(LogQ, qiEvalMod...)
 	LogQ = append(LogQ, qiCoeffsToSlots...)
+
+	LogPQ := 0
+	for _, q := range LogQ {LogPQ += q}
+	for _, q := range LogP {LogPQ += q}
+
+	println()
+	fmt.Printf("LogN = %d, LogPQ = %d, LogModulusBeforeBoot = %d, LogModulusAfterBoot = %d\n\n",
+		LogN,
+		LogPQ,
+		q0[0],
+		q0[0] + LogDefaultScale * numLevelsAfterBoot,
+	)
 
 	params, _ := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 		LogN: LogN,
@@ -99,31 +127,13 @@ func main() {
 		CircuitOrder: bootstrapping.ModUpThenEncode,
 	}
 
-	// Key generation
-
-	kgen := rlwe.NewKeyGenerator(params)
-	sk, pk := kgen.GenKeyPairNew()
-	encoder := ckks.NewEncoder(params)
-	decryptor := rlwe.NewDecryptor(params, sk)
-	encryptor := rlwe.NewEncryptor(params, pk)
-	evk, _, _ := btpParams.GenEvaluationKeys(sk)
-	eval, _ := bootstrapping.NewEvaluator(btpParams, evk)
-
-	fmt.Printf("LogN = %d, LogPQ = %d, numLevelsAfterBoot = %d\n\n",
-		LogN,
-		int(math.Round(float64(btpParams.BootstrappingParameters.LogQP()))),
-		numLevelsAfterBoot,
-	)
-
 	// Test
-
-	vecBeforeBoot := make([]complex128, 1<<(LogN-1))
-	vecBoot := make([]complex128, 1<<(LogN-1))
-	polyBeforeBoot := ckks.NewPlaintext(params, 0)
 
 	var totalScaleDown, totalModUp, totalCTS, totalEvalModRe,
 		totalEvalModIm, totalSTC, totalSCORE, totalBoot, totalPrec float64
-	var header string	
+	var header string
+	var results []runResult
+	var wg sync.WaitGroup
 
 	fmt.Println("╔══════════════════════════════════════════════╗")
 	fmt.Println("║     Results for conventional bootstrapping   ║")
@@ -139,6 +149,76 @@ func main() {
 	totalBoot = 0.0
 	totalPrec = 0.0
 
+    results = make([]runResult, numBootRuns)
+	wg = sync.WaitGroup{}
+
+    for i := range numBootRuns {
+        wg.Add(1)
+        go func(i int) {
+            defer wg.Done()
+
+			kgen := rlwe.NewKeyGenerator(params)
+			sk, pk := kgen.GenKeyPairNew()
+			evk, _, _ := btpParams.GenEvaluationKeys(sk)
+			encoder := ckks.NewEncoder(params)
+			decryptor := rlwe.NewDecryptor(params, sk)
+			encryptor := rlwe.NewEncryptor(params, pk)
+			eval, _ := bootstrapping.NewEvaluator(btpParams, evk)
+
+            vecBefore := make([]complex128, 1<<(LogN-1))
+            for j := range vecBefore {
+                vecBefore[j] = complex(sampling.RandFloat64(-1, 1), 0)
+            }
+			vecAfter := make([]complex128, 1<<(LogN-1))
+            poly := ckks.NewPlaintext(params, 0)
+            encoder.Encode(vecBefore, poly)
+            ctBefore, _ := encryptor.EncryptNew(poly)
+            encoder.Encode(vecBefore, poly)
+
+            t0 := time.Now()
+            ctBoot, _, _ := eval.ScaleDown(ctBefore)
+            t1 := time.Now()
+            ctBoot, _ = eval.ModUp(ctBoot)
+            t2 := time.Now()
+            ctReal, ctImag, _ := eval.CoeffsToSlots(ctBoot)
+            t3 := time.Now()
+            ctReal, _ = eval.EvalMod(ctReal)
+            t4 := time.Now()
+            ctImag, _ = eval.EvalMod(ctImag)
+            t5 := time.Now()
+            ctBoot, _ = eval.SlotsToCoeffs(ctReal, ctImag)
+            t6 := time.Now()
+
+            timeScaleDown := float64(t1.Sub(t0)) / float64(time.Second)
+            timeModUp := float64(t2.Sub(t1)) / float64(time.Second)
+            timeCTS := float64(t3.Sub(t2)) / float64(time.Second)
+            timeEvalModRe := float64(t4.Sub(t3)) / float64(time.Second)
+            timeEvalModIm := float64(t5.Sub(t4)) / float64(time.Second)
+            timeSTC := float64(t6.Sub(t5)) / float64(time.Second)
+            timeBoot := float64(t6.Sub(t0)) / float64(time.Second)
+
+            encoder.Decode(decryptor.DecryptNew(ctBoot), vecAfter)
+            stats := ckks.GetPrecisionStats(params, encoder, nil, vecBefore, vecAfter, 0, false)
+            prec := stats.AVGLog2Prec.Real
+
+            results[i] = runResult{
+                timeScaleDown: timeScaleDown,
+                timeModUp: timeModUp,
+                timeCTS: timeCTS,
+                timeEvalModRe: timeEvalModRe,
+                timeEvalModIm: timeEvalModIm,
+                timeSTC: timeSTC,
+                timeBoot: timeBoot,
+                prec: prec,
+            }
+
+			fmt.Printf("Run %d/%d done...\n", i+1, numBootRuns)
+        }(i)
+    }
+
+    wg.Wait()
+
+	println()
 	header = fmt.Sprintf(
 		"Run | %13s | %13s | %13s | %13s | %13s | %13s | %13s | %13s",
 		"ScaleDown (s)",
@@ -153,56 +233,20 @@ func main() {
 	fmt.Println(header)
 	fmt.Println(strings.Repeat("─", len(header)))
 
-	for i := range numBootRuns {
-		fmt.Printf("%3d | ", i+1)
-		for j := range vecBeforeBoot {
-			vecBeforeBoot[j] = complex(sampling.RandFloat64(-1, 1), 0)
-		}
-		encoder.Encode(vecBeforeBoot, polyBeforeBoot)
-		ctBeforeBoot, _ := encryptor.EncryptNew(polyBeforeBoot)
-		encoder.Encode(vecBeforeBoot, polyBeforeBoot)
-
-		// The following is equivalent to ctBoot = eval.Bootstrap(ctBeforeBoot)
-		// but the individual steps are timed separately.
-		t0 := time.Now()
-		ctBoot, _, _ := eval.ScaleDown(ctBeforeBoot)
-		t1 := time.Now()
-		ctBoot, _ = eval.ModUp(ctBoot)
-		t2 := time.Now()
-		ctReal, ctImag, _ := eval.CoeffsToSlots(ctBoot)
-		t3 := time.Now()
-		ctReal, _ = eval.EvalMod(ctReal)
-		t4 := time.Now()
-		ctImag, _ = eval.EvalMod(ctImag)
-		t5 := time.Now()
-		ctBoot, _ = eval.SlotsToCoeffs(ctReal, ctImag)
-		t6 := time.Now()
-
-		timeScaleDown := float64(t1.Sub(t0)) / float64(time.Second)
-		timeModUp := float64(t2.Sub(t1)) / float64(time.Second)
-		timeCTS := float64(t3.Sub(t2)) / float64(time.Second)
-		timeEvalModRe := float64(t4.Sub(t3)) / float64(time.Second)
-		timeEvalModIm := float64(t5.Sub(t4)) / float64(time.Second)
-		timeSTC := float64(t6.Sub(t5)) / float64(time.Second)
-		timeBoot := float64(t6.Sub(t0)) / float64(time.Second)
-
-		totalScaleDown += timeScaleDown
-		totalModUp += timeModUp
-		totalCTS += timeCTS
-		totalEvalModRe += timeEvalModRe
-		totalEvalModIm += timeEvalModIm
-		totalSTC += timeSTC
-		totalBoot += timeBoot
-
-		encoder.Decode(decryptor.DecryptNew(ctBoot), vecBoot)
-		stats := ckks.GetPrecisionStats(params, encoder, nil, vecBeforeBoot, vecBoot, 0, false)
-		prec := stats.AVGLog2Prec.Real
-		totalPrec += prec
-
-		fmt.Printf("%13.3f | %13.3f | %13.3f | %13.3f | %13.3f | %13.3f | %13.3f | %8.1f bits\n",
-			timeScaleDown, timeModUp, timeCTS, timeEvalModRe, timeEvalModIm, timeSTC, timeBoot, prec,
-		)
-	}
+    for i := range numBootRuns {
+        r := results[i]
+        totalScaleDown += r.timeScaleDown
+        totalModUp += r.timeModUp
+        totalCTS += r.timeCTS
+        totalEvalModRe += r.timeEvalModRe
+        totalEvalModIm += r.timeEvalModIm
+        totalSTC += r.timeSTC
+        totalBoot += r.timeBoot
+        totalPrec += r.prec
+        fmt.Printf("%3d | %13.3f | %13.3f | %13.3f | %13.3f | %13.3f | %13.3f | %13.3f | %8.1f bits\n",
+            i+1, r.timeScaleDown, r.timeModUp, r.timeCTS, r.timeEvalModRe, r.timeEvalModIm, r.timeSTC, r.timeBoot, r.prec,
+        )
+    }
 
 	fmt.Println(strings.Repeat("─", len(header)))
 	fmt.Printf("avg | %13.3f | %13.3f | %13.3f | %13.3f | %13.3f | %13.3f | %13.3f | %8.1f bits\n\n",
@@ -229,6 +273,72 @@ func main() {
 	totalBoot = 0.0
 	totalPrec = 0.0
 
+    results = make([]runResult, numBootRuns)
+    wg = sync.WaitGroup{}
+
+    for i := range numBootRuns {
+        wg.Add(1)
+        go func(i int) {
+            defer wg.Done()
+
+            kgen := rlwe.NewKeyGenerator(params)
+			sk, pk := kgen.GenKeyPairNew()
+			evk, _, _ := btpParams.GenEvaluationKeys(sk)
+			encoder := ckks.NewEncoder(params)
+			decryptor := rlwe.NewDecryptor(params, sk)
+			encryptor := rlwe.NewEncryptor(params, pk)
+			eval, _ := bootstrapping.NewEvaluator(btpParams, evk)
+
+            vecBefore := make([]complex128, 1<<(LogN-1))
+            for j := range vecBefore {
+                vecBefore[j] = complex(sampling.RandFloat64(-1, 1), 0)
+            }
+			vecAfter := make([]complex128, 1<<(LogN-1))
+            poly := ckks.NewPlaintext(params, 0)
+            encoder.Encode(vecBefore, poly)
+            ctBefore, _ := encryptor.EncryptNew(poly)
+            encoder.Encode(vecBefore, poly)
+
+            t0 := time.Now()
+            ctBoot, _, _ := eval.ScaleDown(ctBefore)
+            t1 := time.Now()
+            ctBoot, _ = eval.ModUp(ctBoot)
+            t2 := time.Now()
+            ctBoot, _, _ = eval.CoeffsToSlots(ctBoot)
+            t3 := time.Now()
+            ctBoot, _ = eval.EvalMod(ctBoot)
+            t4 := time.Now()
+            ctBoot, _ = eval.SCORE(ctBoot)
+            t5 := time.Now()
+
+            timeScaleDown := float64(t1.Sub(t0)) / float64(time.Second)
+            timeModUp := float64(t2.Sub(t1)) / float64(time.Second)
+            timeCTS := float64(t3.Sub(t2)) / float64(time.Second)
+            timeEvalModRe := float64(t4.Sub(t3)) / float64(time.Second)
+            timeSCORE := float64(t5.Sub(t4)) / float64(time.Second)
+            timeBoot := float64(t5.Sub(t0)) / float64(time.Second)
+
+            encoder.Decode(decryptor.DecryptNew(ctBoot), vecAfter)
+            stats := ckks.GetPrecisionStats(params, encoder, nil, vecBefore, vecAfter, 0, false)
+            prec := stats.AVGLog2Prec.Real
+
+            results[i] = runResult{
+                timeScaleDown: timeScaleDown,
+                timeModUp: timeModUp,
+                timeCTS: timeCTS,
+                timeEvalModRe: timeEvalModRe,
+                timeSCORE: timeSCORE,
+                timeBoot: timeBoot,
+                prec: prec,
+            }
+
+			fmt.Printf("Run %d/%d done...\n", i+1, numBootRuns)
+        }(i)
+    }
+
+    wg.Wait()
+
+	println()
 	header = fmt.Sprintf(
 		"Run | %13s | %13s | %13s | %13s | %13s | %13s | %13s | %13s",
 		"ScaleDown (s)",
@@ -243,50 +353,19 @@ func main() {
 	fmt.Println(header)
 	fmt.Println(strings.Repeat("─", len(header)))
 
-	for i := range numBootRuns {
-		fmt.Printf("%3d | ", i+1)
-		for j := range vecBeforeBoot {
-			vecBeforeBoot[j] = complex(sampling.RandFloat64(-1, 1), 0)
-		}
-		encoder.Encode(vecBeforeBoot, polyBeforeBoot)
-		ctBeforeBoot, _ := encryptor.EncryptNew(polyBeforeBoot)
-		encoder.Encode(vecBeforeBoot, polyBeforeBoot)
-
-		t0 := time.Now()
-		ctBoot, _, _ := eval.ScaleDown(ctBeforeBoot)
-		t1 := time.Now()
-		ctBoot, _ = eval.ModUp(ctBoot)
-		t2 := time.Now()
-		ctBoot, _, _ = eval.CoeffsToSlots(ctBoot)
-		t3 := time.Now()
-		ctBoot, _ = eval.EvalMod(ctBoot)
-		t4 := time.Now()
-		ctBoot, _ = eval.SCORE(ctBoot)
-		t5 := time.Now()
-
-		timeScaleDown := float64(t1.Sub(t0)) / float64(time.Second)
-		timeModUp := float64(t2.Sub(t1)) / float64(time.Second)
-		timeCTS := float64(t3.Sub(t2)) / float64(time.Second)
-		timeEvalModRe := float64(t4.Sub(t3)) / float64(time.Second)
-		timeSCORE := float64(t5.Sub(t4)) / float64(time.Second)
-		timeBoot := float64(t5.Sub(t0)) / float64(time.Second)
-
-		totalScaleDown += timeScaleDown
-		totalModUp += timeModUp
-		totalCTS += timeCTS
-		totalEvalModRe += timeEvalModRe
-		totalSCORE += timeSCORE
-		totalBoot += timeBoot
-
-		encoder.Decode(decryptor.DecryptNew(ctBoot), vecBoot)
-		stats := ckks.GetPrecisionStats(params, encoder, nil, vecBeforeBoot, vecBoot, 0, false)
-		prec := stats.AVGLog2Prec.Real
-		totalPrec += prec
-
-		fmt.Printf("%13.3f | %13.3f | %13.3f | %13.3f | %13s | %13.3f | %13.3f | %8.1f bits\n",
-			timeScaleDown, timeModUp, timeCTS, timeEvalModRe, "", timeSCORE, timeBoot, prec,
-		)
-	}
+    for i := range numBootRuns {
+        r := results[i]
+        totalScaleDown += r.timeScaleDown
+        totalModUp += r.timeModUp
+        totalCTS += r.timeCTS
+        totalEvalModRe += r.timeEvalModRe
+        totalSCORE += r.timeSCORE
+        totalBoot += r.timeBoot
+        totalPrec += r.prec
+        fmt.Printf("%3d | %13.3f | %13.3f | %13.3f | %13.3f | %13s | %13.3f | %13.3f | %8.1f bits\n",
+            i+1, r.timeScaleDown, r.timeModUp, r.timeCTS, r.timeEvalModRe, "", r.timeSCORE, r.timeBoot, r.prec,
+        )
+    }
 
 	fmt.Println(strings.Repeat("─", len(header)))
 	fmt.Printf("avg | %13.3f | %13.3f | %13.3f | %13.3f | %13s | %13.3f | %13.3f | %8.1f bits\n",
