@@ -130,9 +130,9 @@ func main() {
 		totalEvalModIm, totalSTC, totalSCORE, totalBoot, totalPrec float64
 	var header string	
 
-	fmt.Println("╔══════════════════════════════════════════════╗")
-	fmt.Println("║     Results for conventional bootstrapping   ║")
-	fmt.Println("╚══════════════════════════════════════════════╝")
+	fmt.Println("╔══════════════════════╗")
+	fmt.Println("║      BOOT tests      ║")
+	fmt.Println("╚══════════════════════╝")
 	fmt.Println()
 
 	totalScaleDown = 0.0
@@ -221,9 +221,9 @@ func main() {
 		totalPrec/float64(numBootRuns),
 	)
 
-	fmt.Println("╔══════════════════════════════════════════════╗")
-	fmt.Println("║         Results for SCORE bootstrapping      ║")
-	fmt.Println("╚══════════════════════════════════════════════╝")
+	fmt.Println("╔══════════════════════╗")
+	fmt.Println("║     R-BOOT tests     ║")
+	fmt.Println("╚══════════════════════╝")
 	fmt.Println()
 
 	totalScaleDown = 0.0
