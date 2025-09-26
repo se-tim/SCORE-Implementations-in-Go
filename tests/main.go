@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -30,15 +29,13 @@ type runResult struct {
 }
 
 func main() {
-	runtime.GOMAXPROCS(runtime.NumCPU())
-
 	numBootRunsFlag := flag.Int("numBootRuns", 8, "number of bootstrap runs")
-	logNFlag := flag.Int("logN", 12, "log2 of ring degree N")
-	levelsAfterBootFlag := flag.Int("levelsAfterBoot", 3, "levels after bootstrapping")
+	LogNFlag := flag.Int("LogN", 14, "Log2 of ring degree N")
+	levelsAfterBootFlag := flag.Int("levelsAfterBoot", 1, "levels after bootstrapping")
 	flag.Parse()
 
 	numBootRuns := *numBootRunsFlag
-	LogN := *logNFlag
+	LogN := *LogNFlag
 	numLevelsAfterBoot := *levelsAfterBootFlag
 	longTermSecretWeight := 192
 	ephemeralSecretWeight := 32
