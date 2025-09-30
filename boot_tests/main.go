@@ -20,11 +20,11 @@ func main() {
 
 	// Parameters
 
-	LogN := 16
+	LogN := 12
 	numLevelsAfterBoot := 7
 	longTermSecretWeight := 192
 	ephemeralSecretWeight := 32
-	numBootRuns := 5
+	numBootRuns := 3
 
 	LogDefaultScale := 40
 	q0 := []int{55}
@@ -165,7 +165,6 @@ func main() {
 		}
 		encoder.Encode(vecBeforeBoot, polyBeforeBoot)
 		ctBeforeBoot, _ := encryptor.EncryptNew(polyBeforeBoot)
-		encoder.Encode(vecBeforeBoot, polyBeforeBoot)
 
 		// The following is equivalent to ctBoot = eval.Bootstrap(ctBeforeBoot)
 		// but the individual steps are timed separately.
@@ -183,13 +182,13 @@ func main() {
 		ctBoot, _ = eval.SlotsToCoeffs(ctReal, ctImag)
 		t6 := time.Now()
 
-		timeScaleDown := float64(t1.Sub(t0)) / float64(time.Second)
-		timeModUp := float64(t2.Sub(t1)) / float64(time.Second)
-		timeCTS := float64(t3.Sub(t2)) / float64(time.Second)
-		timeEvalModRe := float64(t4.Sub(t3)) / float64(time.Second)
-		timeEvalModIm := float64(t5.Sub(t4)) / float64(time.Second)
-		timeSTC := float64(t6.Sub(t5)) / float64(time.Second)
-		timeBoot := float64(t6.Sub(t0)) / float64(time.Second)
+		timeScaleDown := t1.Sub(t0).Seconds()
+		timeModUp := t2.Sub(t1).Seconds()
+		timeCTS := t3.Sub(t2).Seconds()
+		timeEvalModRe := t4.Sub(t3).Seconds()
+		timeEvalModIm := t5.Sub(t4).Seconds()
+		timeSTC := t6.Sub(t5).Seconds()
+		timeBoot := t6.Sub(t0).Seconds()
 
 		totalScaleDown += timeScaleDown
 		totalModUp += timeModUp
@@ -269,12 +268,12 @@ func main() {
 		ctBoot, _ = eval.SCORE(ctBoot)
 		t5 := time.Now()
 
-		timeScaleDown := float64(t1.Sub(t0)) / float64(time.Second)
-		timeModUp := float64(t2.Sub(t1)) / float64(time.Second)
-		timeCTS := float64(t3.Sub(t2)) / float64(time.Second)
-		timeEvalModRe := float64(t4.Sub(t3)) / float64(time.Second)
-		timeSCORE := float64(t5.Sub(t4)) / float64(time.Second)
-		timeBoot := float64(t5.Sub(t0)) / float64(time.Second)
+		timeScaleDown := t1.Sub(t0).Seconds()
+		timeModUp := t2.Sub(t1).Seconds()
+		timeCTS := t3.Sub(t2).Seconds()
+		timeEvalModRe := t4.Sub(t3).Seconds()
+		timeSCORE := t5.Sub(t4).Seconds()
+		timeBoot := t5.Sub(t0).Seconds()
 
 		totalScaleDown += timeScaleDown
 		totalModUp += timeModUp
