@@ -131,6 +131,41 @@ func NewEvaluator(btpParams Parameters, evk *EvaluationKeys) (eval *Evaluator, e
 	return
 }
 
+// NewScoreEvaluator creates an Evaluator that is initialized only for the SCORE transformation
+func NewScoreEvaluator(btpParams Parameters, evk *EvaluationKeys) (eval *Evaluator, err error) {
+
+    eval = &Evaluator{}
+
+    eval.Parameters = btpParams
+
+    params := btpParams.BootstrappingParameters
+
+    eval.EvaluationKeys = evk
+    eval.Evaluator = ckks.NewEvaluator(params, evk)
+    eval.DFTEvaluator = dft.NewEvaluator(params, eval.Evaluator)
+
+    if btpParams.SlotsToCoeffsParameters.Scaling == nil {
+        eval.SlotsToCoeffsParameters.Scaling = new(big.Float).SetFloat64(1.0)
+    } else {
+        eval.SlotsToCoeffsParameters.Scaling = btpParams.SlotsToCoeffsParameters.Scaling
+    }
+
+    encoder := ckks.NewEncoder(params)
+    if eval.S2CDFTMatrix, err = dft.NewMatrixFromLiteral(params, eval.SlotsToCoeffsParameters, encoder); err != nil {
+        return nil, err
+    }
+
+    scoreLit := eval.SlotsToCoeffsParameters
+    scoreLit.SCORE = &dft.SCOREOptions{DecodeHalfScale: true}
+    if eval.SCOREMatrix, err = dft.NewMatrixFromLiteral(params, scoreLit, encoder); err != nil {
+        return nil, err
+    }
+
+    eval.pool = rlwe.NewPool(eval.BootstrappingParameters.RingQP())
+
+    return eval, nil
+}
+
 // CheckKeys checks if all the necessary keys are present in the instantiated [Evaluator]
 func (eval Evaluator) checkKeys(evk *EvaluationKeys) (err error) {
 

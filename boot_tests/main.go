@@ -16,29 +16,41 @@ import (
 )
 
 func main() {
-	runtime.GOMAXPROCS(runtime.NumCPU())
+	runtime.GOMAXPROCS(1)
 
 	// Parameters
 
-	LogN := 12
-	numLevelsAfterBoot := 7
+	LogN := 16
+	numLevelsAfterBoot := 1
 	longTermSecretWeight := 192
 	ephemeralSecretWeight := 32
 	numBootRuns := 3
 
 	LogDefaultScale := 40
-	q0 := []int{55}
-	qiAfterBoot := make([]int, numLevelsAfterBoot)
-	for i := range qiAfterBoot {qiAfterBoot[i] = LogDefaultScale}
-	qiSlotsToCoeffs := []int{39, 39, 39}
-	qiEvalMod := []int{60, 60, 60, 60, 60, 60, 60, 60}
-	qiCoeffsToSlots := []int{56, 56, 56, 56}
+	LogBaseQ := []int{55}
+	LogQiAfterBoot := make([]int, numLevelsAfterBoot)
+	for i := range LogQiAfterBoot {LogQiAfterBoot[i] = LogDefaultScale}
+	LogQiSlotsToCoeffs := []int{39, 39, 39}
+	LogQiEvalMod := []int{60, 60, 60, 60, 60, 60, 60, 60}
+	LogQiCoeffsToSlots := []int{56, 56, 56, 56}
 	LogP := []int{61, 61, 61, 61, 61}
 
-	LogQ := append(q0, qiAfterBoot...)
-	LogQ = append(LogQ, qiSlotsToCoeffs...)
-	LogQ = append(LogQ, qiEvalMod...)
-	LogQ = append(LogQ, qiCoeffsToSlots...)
+	LogQ := append(LogBaseQ, LogQiAfterBoot...)
+	LogQ = append(LogQ, LogQiSlotsToCoeffs...)
+	LogQ = append(LogQ, LogQiEvalMod...)
+	LogQ = append(LogQ, LogQiCoeffsToSlots...)
+
+	LogPQ := 0
+	for _, q := range LogQ {LogPQ += q}
+	for _, p := range LogP {LogPQ += p}
+
+	println()
+	fmt.Printf("LogN = %d, LogPQ = %d, LogModulusBeforeBoot = %d, LogModulusAfterBoot = %d\n\n",
+		LogN,
+		LogPQ,
+		LogBaseQ[0],
+		LogBaseQ[0] + LogDefaultScale * numLevelsAfterBoot,
+	)
 
 	params, _ := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
 		LogN: LogN,
@@ -56,15 +68,15 @@ func main() {
 		LevelP: params.MaxLevelP(),
 		LogBSGSRatio: 1,
 		BitReversed: false,
-		Levels: make([]int, len(qiCoeffsToSlots)),
+		Levels: make([]int, len(LogQiCoeffsToSlots)),
 	}
 	for i := range CoeffsToSlotsParameters.Levels {
 		CoeffsToSlotsParameters.Levels[i] = 1
 	}
 
 	Mod1ParametersLiteral := mod1.ParametersLiteral{
-		LevelQ: numLevelsAfterBoot + len(qiSlotsToCoeffs) + len(qiEvalMod),
-		LogScale: qiEvalMod[0],
+		LevelQ: numLevelsAfterBoot + len(LogQiSlotsToCoeffs) + len(LogQiEvalMod),
+		LogScale: LogQiEvalMod[0],
 		Mod1Type: mod1.CosDiscrete,
 		Mod1Degree: 30,
 		DoubleAngle: 3,
@@ -78,11 +90,11 @@ func main() {
 		Type: dft.HomomorphicDecode,
 		Format: dft.RepackImagAsReal,
 		LogSlots: LogN - 1,
-		LevelQ: numLevelsAfterBoot + len(qiSlotsToCoeffs),
+		LevelQ: numLevelsAfterBoot + len(LogQiSlotsToCoeffs),
 		LevelP: params.MaxLevelP(),
 		LogBSGSRatio: 1,
 		BitReversed: false,
-		Levels: make([]int, len(qiSlotsToCoeffs)),
+		Levels: make([]int, len(LogQiSlotsToCoeffs)),
 	}
 	for i := range SlotsToCoeffsParameters.Levels {
 		SlotsToCoeffsParameters.Levels[i] = 1
@@ -103,22 +115,10 @@ func main() {
 	kgen := rlwe.NewKeyGenerator(params)
 	sk, pk := kgen.GenKeyPairNew()
 	encoder := ckks.NewEncoder(params)
-	decryptor := rlwe.NewDecryptor(params, sk)
 	encryptor := rlwe.NewEncryptor(params, pk)
+	decryptor := rlwe.NewDecryptor(params, sk)
 	evk, _, _ := btpParams.GenEvaluationKeys(sk)
 	eval, _ := bootstrapping.NewEvaluator(btpParams, evk)
-
-	LogPQ := 0
-	for _, q := range LogQ {LogPQ += q}
-	for _, q := range LogP {LogPQ += q}
-
-	println()
-	fmt.Printf("LogN = %d, LogPQ = %d, LogModulusBeforeBoot = %d, LogModulusAfterBoot = %d\n\n",
-		LogN,
-		LogPQ,
-		q0[0],
-		q0[0] + LogDefaultScale * numLevelsAfterBoot,
-	)
 
 	// Test
 
@@ -254,7 +254,6 @@ func main() {
 		}
 		encoder.Encode(vecBeforeBoot, polyBeforeBoot)
 		ctBeforeBoot, _ := encryptor.EncryptNew(polyBeforeBoot)
-		encoder.Encode(vecBeforeBoot, polyBeforeBoot)
 
 		t0 := time.Now()
 		ctBoot, _, _ := eval.ScaleDown(ctBeforeBoot)
