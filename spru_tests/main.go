@@ -8,7 +8,6 @@ import (
 
 	"github.com/tuneinsight/lattigo/v6/circuits/ckks/bootstrapping"
 	"github.com/tuneinsight/lattigo/v6/circuits/ckks/dft"
-	"github.com/tuneinsight/lattigo/v6/circuits/ckks/mod1"
 	"github.com/tuneinsight/lattigo/v6/core/rlwe"
 	"github.com/tuneinsight/lattigo/v6/ring"
 	"github.com/tuneinsight/lattigo/v6/schemes/ckks"
@@ -81,71 +80,46 @@ func main() {
 	//   Parameters
 	// ==============
 	
-	LogN := 10
-	LogSecretWeight := 4
-	LogNumSlots := 3
-	numLevelsAfterBoot := 1
+	logN := 12
+	logSecretWeight := 4
+	logNumSlots := 2
+	numLevelsAfterBoot := 3
 
-	LogDefaultScale := 40
-	LogBootScale := 58
-	secretWeight := 1 << LogSecretWeight
-	LogBaseQ := []int{55}
-	LoqQiAfterBoot := make([]int, numLevelsAfterBoot)
-	for i := range LoqQiAfterBoot {LoqQiAfterBoot[i] = LogDefaultScale}
-	LogQiSlotsToCoeffs := []int{39, 39, 39}
-	LogQiProductTree := make([]int, LogSecretWeight)
-	for i := range LogQiProductTree {LogQiProductTree[i] = LogBootScale}
-	LogQiBootstrapKeyProduct := []int{LogBootScale}
+	logDefaultScale := 40
+	logBootScale := 58
+	secretWeight := 1 << logSecretWeight
+	logBaseQ := []int{55}
+	loqQiAfterBoot := make([]int, numLevelsAfterBoot)
+	for i := range loqQiAfterBoot {loqQiAfterBoot[i] = logDefaultScale}
+	// logQiSlotsToCoeffs := []int{39, 39, 39}
+	logQiSlotsToCoeffs := []int{39}
+	logQiProductTree := make([]int, logSecretWeight)
+	for i := range logQiProductTree {logQiProductTree[i] = logBootScale}
+	logQiBootstrapKeyProduct := []int{logBootScale}
 	
-	LogP := []int{61, 61, 61, 61, 61}
-	LogQ := append(LogBaseQ, LoqQiAfterBoot...)
-	LogQ = append(LogQ, LogQiSlotsToCoeffs...)
-	LogQ = append(LogQ, LogQiProductTree...)
-	LogQ = append(LogQ, LogQiBootstrapKeyProduct...)
+	logP := []int{61, 61, 61, 61, 61}
+	logQ := append(logBaseQ, loqQiAfterBoot...)
+	logQ = append(logQ, logQiSlotsToCoeffs...)
+	logQ = append(logQ, logQiProductTree...)
+	logQ = append(logQ, logQiBootstrapKeyProduct...)
 
 	params, _ := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
-		LogN: LogN,
-		LogQ: LogQ,
-		LogP: LogP,
-		LogDefaultScale: LogDefaultScale,
+		LogN: logN,
+		LogQ: logQ,
+		LogP: logP,
+		LogDefaultScale: logDefaultScale,
 		Xs: ring.Ternary{H: secretWeight},
 	})
 
-	CoeffsToSlotsParameters := dft.MatrixLiteral{
-		Type: dft.HomomorphicEncode,
-		Format: dft.RepackImagAsReal,
-		LogSlots: LogN - 1,
-		LevelQ: params.MaxLevelQ(),
+	SlotsToCoeffsParameters := dft.MatrixLiteral{
+		Type: dft.HomomorphicDecode,
+		Format: dft.Standard,
+		LogSlots: logNumSlots,
+		LevelQ: numLevelsAfterBoot + len(logQiSlotsToCoeffs),
 		LevelP: params.MaxLevelP(),
 		LogBSGSRatio: 1,
 		BitReversed: false,
-		Levels: make([]int, 0),
-	}
-	for i := range CoeffsToSlotsParameters.Levels {
-		CoeffsToSlotsParameters.Levels[i] = 1
-	}
-
-	Mod1ParametersLiteral := mod1.ParametersLiteral{
-		LevelQ: params.MaxLevelQ(),
-		LogScale: LogBaseQ[0],
-		Mod1Type: mod1.CosDiscrete,
-		Mod1Degree: 0,
-		DoubleAngle: 3,
-		K: 16,
-		LogMessageRatio: 24 - LogN,
-		Mod1InvDegree: 0,
-	}
-
-	// Same parameters are used for SCORE
-	SlotsToCoeffsParameters := dft.MatrixLiteral{
-		Type: dft.HomomorphicDecode,
-		Format: dft.RepackImagAsReal,
-		LogSlots: LogNumSlots,
-		LevelQ: numLevelsAfterBoot + len(LogQiSlotsToCoeffs),
-		LevelP: params.MaxLevelP(),
-		LogBSGSRatio: 1,
-		BitReversed: true,
-		Levels: make([]int, len(LogQiSlotsToCoeffs)),
+		Levels: make([]int, len(logQiSlotsToCoeffs)),
 	}
 	for i := range SlotsToCoeffsParameters.Levels {
 		SlotsToCoeffsParameters.Levels[i] = 1
@@ -154,25 +128,22 @@ func main() {
 	btpParams := bootstrapping.Parameters{
 		ResidualParameters: params,
 		BootstrappingParameters: params,
-		CoeffsToSlotsParameters: CoeffsToSlotsParameters,
-		Mod1ParametersLiteral: Mod1ParametersLiteral,
 		SlotsToCoeffsParameters: SlotsToCoeffsParameters,
-		CircuitOrder: bootstrapping.ModUpThenEncode,
 	}
 
 	kgen := rlwe.NewKeyGenerator(params)
 	sk, pk := kgen.GenSPRUKeyPairNew()
 	rlk := kgen.GenRelinearizationKeyNew(sk)
 	encoder := ckks.NewEncoder(params)
-	// decryptor := rlwe.NewDecryptor(params, sk)
+	decryptor := rlwe.NewDecryptor(params, sk)
 	encryptor := rlwe.NewEncryptor(params, pk)
 
 	evk, _, _ := btpParams.GenEvaluationKeys(sk)
-	eval, err := bootstrapping.NewScoreEvaluator(btpParams, evk)
-	if err != nil {panic(err)}
+	eval, _ := bootstrapping.NewSCOREEvaluator(btpParams, evk)
 
-	rotElem := make([]uint64, LogN)
-	for i := range LogN {rotElem[i] = params.GaloisElementForRotation(1 << i)}
+	rotElem := make([]uint64, logN + 1)
+	for i := range logN {rotElem[i] = params.GaloisElementForRotation(1 << i)}
+	rotElem[logN] = params.GaloisElementForComplexConjugation()
 	rotKeys := kgen.GenGaloisKeysNew(rotElem, sk)
 	rotEval := ckks.NewEvaluator(params, rlwe.NewMemEvaluationKeySet(rlk, rotKeys...))
 
@@ -185,14 +156,14 @@ func main() {
 	baseRing.INTT(sk_INTT, sk_INTT)
 	baseRing.IMForm(sk_INTT, sk_INTT)
 
-	n := 1 << LogNumSlots
+	n := 1 << logNumSlots
 	B := params.N() / secretWeight
 	sVectors := make([][]complex128, 2*n)
 	csEncryptions := make([]*rlwe.Ciphertext, 2*n)
 	B_over_2n := B / (2 * n)
 
 	for u := range (2 * n) {
-		s := make([]complex128, 1<<(LogN-1))
+		s := make([]complex128, 1<<(logN-1))
 		for a := range n {
 			for b := range secretWeight {
 				for k := range B_over_2n {
@@ -204,7 +175,7 @@ func main() {
 		}
 		s = bitReverseVector(s, n)
 		poly := ckks.NewPlaintext(params, params.MaxLevel())
-		poly.Scale = rlwe.NewScale(math.Exp2(float64(LogBootScale)))
+		poly.Scale = rlwe.NewScale(math.Exp2(float64(logBootScale)))
 		encoder.Encode(s, poly)
 		cs, _ := encryptor.EncryptNew(poly)
 		sVectors[u] = s
@@ -214,17 +185,35 @@ func main() {
 	// Define delta
 
 	delta := math.Pow(
-		(float64(uint64(1)<<LogBaseQ[0])/(4*math.Pi*math.Pow(2, float64(LogBootScale)))),
+		(math.Pow(2, float64(logBaseQ[0]))/(4*math.Pi*math.Pow(2, 16+float64(logBootScale)))),
 		1.0/float64(secretWeight),
 	)
 
 	// Encode & encrypt
 
-	vec := make([]complex128, 1<<(LogN-1))
-	for j := range vec {vec[j] = complex(float64(1+j%(1<<LogNumSlots)), 0)}
+	vec := make([]complex128, 1<<(logN-1))
+	for k := range vec {vec[k] = complex(float64(k%n), 0)}
+	// Fill base pattern with random reals in [-1, 1]
+	// for i := 0; i < 1 << logNumSlots; i++ {
+	// 	vec[i] = complex(rand.Float64()*2-1, 0)
+	// }
+	// // Repeat the base pattern across the rest of the vector
+	// for i := 1 << logNumSlots; i < 1 << (logN-1); i++ {
+	// 	vec[i] = vec[i % (1 << logNumSlots)]
+	// }
 	poly := ckks.NewPlaintext(params, params.MaxLevel())
 	encoder.Encode(vec, poly)
 	ct, _ := encryptor.EncryptNew(poly)
+
+	polyDec := decryptor.DecryptNew(ct)
+	polyDec.Scale = rlwe.NewScale(math.Exp2(float64(logDefaultScale)))
+	vecDecCheck := make([]complex128, params.N()/2)
+	encoder.Decode(polyDec, vecDecCheck)
+	fmt.Printf("First 4 values of decoded polyDec: %v\n", vecDecCheck[:6])
+
+	// ========
+	//   SPRU
+	// ========
 
 	// Encodings related to ciphertext coefficients (TODO: merge loops)
 
@@ -247,6 +236,7 @@ func main() {
 		}
 		cVectors[a] = c_a
 	}
+	eVectors := make([][]complex128, 2*n)
 	eEncodings := make([]*rlwe.Plaintext, 2*n)
 	for u := range 2 * n {
 		e := make([]complex128, params.N()/2)
@@ -261,76 +251,160 @@ func main() {
 		}
 		e = bitReverseVector(e, n)
 		poly := ckks.NewPlaintext(params, params.MaxLevel())
-		poly.Scale = rlwe.NewScale(math.Exp2(float64(LogBootScale)))
+		poly.Scale = rlwe.NewScale(math.Exp2(float64(logBootScale)))
 		encoder.Encode(e, poly)
+		eVectors[u] = e
 		eEncodings[u] = poly
 	}
 
 	// Initial sum
 
-	sum := rlwe.NewCiphertext(params, 1, params.MaxLevel())
-	for u := range 2 * n {
+	ctBoot := rlwe.NewCiphertext(params, 1, params.MaxLevel())
+	for u := range (2 * n) {
 		term, _ := rotEval.MulNew(csEncryptions[u], eEncodings[u])
 		rotEval.Rescale(term, term)
-		if u == 0 {sum = term} else {sum, _ = rotEval.AddNew(sum, term)}
+		if u == 0 {ctBoot = term} else {ctBoot, _ = rotEval.AddNew(ctBoot, term)}
 	}
 
 	// Trace
 
-	for i := 1 << (LogN-1); i >= n * secretWeight; i /= 2 {
-		ctRot, _ := rotEval.RotateNew(ct, i)
-		ct, _ = rotEval.AddNew(ct, ctRot)
+	for i := 1 << (logN-1); i >= n * secretWeight; i /= 2 {
+		ctRot, _ := rotEval.RotateNew(ctBoot, i)
+		ctBoot, _ = rotEval.AddNew(ctBoot, ctRot)
 	}
 
 	// Product tree
 
 	for i := n * secretWeight / 2; i >= n; i /= 2 {
-		ctRot, _ := rotEval.RotateNew(ct, i)
-		rotEval.MulRelin(ct, ctRot, ct)
-		rotEval.Rescale(ct, ct)
+		ctRot, _ := rotEval.RotateNew(ctBoot, i)
+		rotEval.MulRelin(ctBoot, ctRot, ctBoot)
+		rotEval.Rescale(ctBoot, ctBoot)
 	}
 
 	// SCORE
 
-	ctConj, _ := rotEval.ConjugateNew(ct)
-	ct, _ = rotEval.SubNew(ct, ctConj)
-	ct, _ = eval.SCORE(ct)
+	ctConj, _ := rotEval.ConjugateNew(ctBoot)
+	ctBoot, _ = rotEval.SubNew(ctBoot, ctConj)
+	eval.Mul(ctBoot, -1i, ctBoot) // Division by imaginary unit
+
+	// J := bitReverse(j,n) * params.N() / (2 * n)
+
+	// for j := 0; j < 3+1<<logNumSlots; j++ {
+	// 	fmt.Printf("Cipher entry after taking twice imaginary part [%d]: %v\n", j, vecDecCheck[j])
+	// }
+
+	ctBoot0, _ := eval.SCORE(ctBoot)
+	// ctBootDouble, _ := rotEval.MulNew(ctBoot, 2)
+	// ctBoot1, _ := eval.SCORE(ctBootDouble)
+
+	polyDec = decryptor.DecryptNew(ctBoot0)
+	polyDec.Scale = rlwe.NewScale(math.Exp2(float64(logDefaultScale)))
+	vecDecCheck = make([]complex128, params.N()/2)
+	encoder.Decode(polyDec, vecDecCheck)
+	fmt.Printf("First 4 values of decoded polyDec: %v\n", vecDecCheck[:6])
+
+	stats := ckks.GetPrecisionStats(params, encoder, nil, vec, vecDecCheck, 0, false)
+	prec := stats.AVGLog2Prec.Real
+
+	fmt.Printf("Estimated precision after bootstrapping: %8.1f bits\n", prec)
 
 	// Check
 
-	decryptor := rlwe.NewDecryptor(params, sk)
-	pt := decryptor.DecryptNew(ct)
-	vecDec := make([]complex128, 1<<(LogN-1))
-	encoder.Decode(pt, vecDec)
-	fmt.Printf("Decrypted ct (first 10 values): %v\n", vecDec[:10])
+	higherRing := params.RingQ().AtLevel(2)
 
-	// Manual decryption check
-	//
-	// poly_INTT := *poly.Value.CopyNew()
-	// baseRing.INTT(poly_INTT, poly_INTT)
-	// baseRing.Reduce(poly_INTT, poly_INTT)
+	for j := 0; j < 2*n; j++ {
+		J := j * params.N() / (2 * n)
+		polyBoot0 := decryptor.DecryptNew(ctBoot0)
+		polyBoot0_INTT := *polyBoot0.Value.CopyNew()
+		higherRing.INTT(polyBoot0_INTT, polyBoot0_INTT)
+		fmt.Printf("boot-plaintext polynomial coefficient [%d]: %d\n", J, polyBoot0_INTT.Coeffs[0][J])
+	}
 
-	// j := 0
+	// polyBoot1 := decryptor.DecryptNew(ctBoot1)
+	// polyBoot1_INTT := *polyBoot1.Value.CopyNew()
+	// higherRing.INTT(polyBoot1_INTT, polyBoot1_INTT)
+	// fmt.Printf("Some boot-plaintext polynomial coefficient (double input): %d\n", polyBoot1_INTT.Coeffs[0][J])
 
-	// fmt.Printf("poly_INTT.Coeffs[0][%d] = %d\n", j, poly_INTT.Coeffs[0][j]%baseQ)
-	// 
-	// res := (uint64(c0_INTT.Coeffs[0][j]) % baseQ)
-	// for i := 0; i <= j; i++ {
-	// 	term := mulMod(sk_INTT.Coeffs[0][i], c1_INTT.Coeffs[0][j-i], baseQ)
+
+	fmt.Printf("Level of ctBoot: %d\n", ctBoot.Level())
+
+	// vecDec := make([]complex128, n)
+	// encoder.Decode(polyBoot, vecDec)
+	// fmt.Printf("First slot of decrypted ct: %v\n", vecDec[0])
+
+
+	// ==================
+	//   Plaintext SPRU
+	// ==================
+
+	// Initial sum
+	plainSum := make([]complex128, params.N()/2)
+	for u := range (2 * n) {
+		for i := range plainSum {
+			plainSum[i] += sVectors[u][i] * eVectors[u][i]
+		}
+	}
+
+	// Trace
+	for i := 1 << (logN-1); i >= n*secretWeight; i /= 2 {
+		for j := range plainSum {
+			plainSum[j] += plainSum[(j+i)%(params.N()/2)]
+		}
+	}
+
+	// Product tree
+	for i := n * secretWeight / 2; i >= n; i /= 2 {
+		for j := range plainSum {
+			plainSum[j] *= plainSum[(j+i)%(params.N()/2)]
+		}
+	}
+
+	// Take imaginary part
+	for i := range plainSum {
+		plainSum[i] -= cmplx.Conj(plainSum[i])
+		plainSum[i] *= complex(0, -1)
+	}
+
+	// for j := 0; j < 1+1<<logNumSlots; j++ {
+	// 	fmt.Printf("Some plain entry after taking twice imaginary part [%d]: %v\n", j, plainSum[j])
+	// }
+
+
+
+
+
+
+
+	// Get some plaintext polynomial coefficient
+	
+	for j := 0; j < 2*n; j++ {
+		J := j * params.N() / (2 * n)
+		poly_INTT := *poly.Value.CopyNew()
+		baseRing.INTT(poly_INTT, poly_INTT)
+		baseRing.Reduce(poly_INTT, poly_INTT)
+		fmt.Printf("plaintext polynomial coefficient [%d]: %d\n", J, poly_INTT.Coeffs[0][J]%baseQ)
+	}
+
+	// SPRU in plaintext
+
+
+
+
+
+
+
+	// Manual decryption
+	
+	// res := (uint64(c0_INTT.Coeffs[0][J]) % baseQ)
+	// for i := 0; i <= J; i++ {
+	// 	term := mulMod(sk_INTT.Coeffs[0][i], c1_INTT.Coeffs[0][J-i], baseQ)
 	// 	if term <= baseQ - res {res += term} else {res -= baseQ - term}
 	// }
-	// for i := j+1; i < params.N(); i++ {
-	// 	term := mulMod(sk_INTT.Coeffs[0][i], c1_INTT.Coeffs[0][params.N()+j-i], baseQ)
+	// for i := J+1; i < params.N(); i++ {
+	// 	term := mulMod(sk_INTT.Coeffs[0][i], c1_INTT.Coeffs[0][params.N()+J-i], baseQ)
 	// 	if res >= term {res -= term} else {res += baseQ - term}
 	// }
-	// fmt.Printf("Estimated poly_INTT.Coeffs[0][%d] = %d\n", j, res)
-
-
-
-
-
-
-
+	// fmt.Printf("Estimated poly_INTT.Coeffs[0][%d] = %d\n", J, res)
 
 	// Trace
 

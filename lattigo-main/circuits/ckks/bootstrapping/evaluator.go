@@ -131,8 +131,8 @@ func NewEvaluator(btpParams Parameters, evk *EvaluationKeys) (eval *Evaluator, e
 	return
 }
 
-// NewScoreEvaluator creates an Evaluator that is initialized only for the SCORE transformation
-func NewScoreEvaluator(btpParams Parameters, evk *EvaluationKeys) (eval *Evaluator, err error) {
+// NewSCOREEvaluator creates an Evaluator that is initialized only for the SCORE transformation
+func NewSCOREEvaluator(btpParams Parameters, evk *EvaluationKeys) (eval *Evaluator, err error) {
 
     eval = &Evaluator{}
 

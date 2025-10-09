@@ -804,7 +804,7 @@ func (d MatrixLiteral) GenMatrices(LogN int, prec uint) (plainVector []ltcommon.
 		}
 	}
 
-	// First column of first DFT matrix scaled by 1/2
+	// First column of first matrix scaled by 1/2
 	if ltType == HomomorphicDecode && d.SCORE != nil && d.SCORE.DecodeHalfScale {
 		A := plainVector[0]
 		n := len(A[0])

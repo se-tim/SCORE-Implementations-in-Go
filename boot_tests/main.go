@@ -20,68 +20,68 @@ func main() {
 
 	// Parameters
 
-	LogN := 16
+	logN := 16
 	numLevelsAfterBoot := 1
 	longTermSecretWeight := 192
 	ephemeralSecretWeight := 32
 	numBootRuns := 3
 
-	LogDefaultScale := 40
-	LogBaseQ := []int{55}
-	LogQiAfterBoot := make([]int, numLevelsAfterBoot)
-	for i := range LogQiAfterBoot {LogQiAfterBoot[i] = LogDefaultScale}
-	LogQiSlotsToCoeffs := []int{39, 39, 39}
-	LogQiEvalMod := []int{60, 60, 60, 60, 60, 60, 60, 60}
-	LogQiCoeffsToSlots := []int{56, 56, 56, 56}
-	LogP := []int{61, 61, 61, 61, 61}
+	logDefaultScale := 40
+	logBaseQ := []int{55}
+	logQiAfterBoot := make([]int, numLevelsAfterBoot)
+	for i := range logQiAfterBoot {logQiAfterBoot[i] = logDefaultScale}
+	logQiSlotsToCoeffs := []int{39, 39, 39}
+	logQiEvalMod := []int{60, 60, 60, 60, 60, 60, 60, 60}
+	logQiCoeffsToSlots := []int{56, 56, 56, 56}
+	logP := []int{61, 61, 61, 61, 61}
 
-	LogQ := append(LogBaseQ, LogQiAfterBoot...)
-	LogQ = append(LogQ, LogQiSlotsToCoeffs...)
-	LogQ = append(LogQ, LogQiEvalMod...)
-	LogQ = append(LogQ, LogQiCoeffsToSlots...)
+	logQ := append(logBaseQ, logQiAfterBoot...)
+	logQ = append(logQ, logQiSlotsToCoeffs...)
+	logQ = append(logQ, logQiEvalMod...)
+	logQ = append(logQ, logQiCoeffsToSlots...)
 
-	LogPQ := 0
-	for _, q := range LogQ {LogPQ += q}
-	for _, p := range LogP {LogPQ += p}
+	logPQ := 0
+	for _, q := range logQ {logPQ += q}
+	for _, p := range logP {logPQ += p}
 
 	println()
-	fmt.Printf("LogN = %d, LogPQ = %d, LogModulusBeforeBoot = %d, LogModulusAfterBoot = %d\n\n",
-		LogN,
-		LogPQ,
-		LogBaseQ[0],
-		LogBaseQ[0] + LogDefaultScale * numLevelsAfterBoot,
+	fmt.Printf("logN = %d, logPQ = %d, logModulusBeforeBoot = %d, logModulusAfterBoot = %d\n\n",
+		logN,
+		logPQ,
+		logBaseQ[0],
+		logBaseQ[0] + logDefaultScale * numLevelsAfterBoot,
 	)
 
 	params, _ := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
-		LogN: LogN,
-		LogQ: LogQ,
-		LogP: LogP,
-		LogDefaultScale: LogDefaultScale,
+		LogN: logN,
+		LogQ: logQ,
+		LogP: logP,
+		LogDefaultScale: logDefaultScale,
 		Xs: ring.Ternary{H: longTermSecretWeight},
 	})
 
 	CoeffsToSlotsParameters := dft.MatrixLiteral{
 		Type: dft.HomomorphicEncode,
 		Format: dft.RepackImagAsReal,
-		LogSlots: LogN - 1,
+		LogSlots: logN - 1,
 		LevelQ: params.MaxLevelQ(),
 		LevelP: params.MaxLevelP(),
 		LogBSGSRatio: 1,
 		BitReversed: false,
-		Levels: make([]int, len(LogQiCoeffsToSlots)),
+		Levels: make([]int, len(logQiCoeffsToSlots)),
 	}
 	for i := range CoeffsToSlotsParameters.Levels {
 		CoeffsToSlotsParameters.Levels[i] = 1
 	}
 
 	Mod1ParametersLiteral := mod1.ParametersLiteral{
-		LevelQ: numLevelsAfterBoot + len(LogQiSlotsToCoeffs) + len(LogQiEvalMod),
-		LogScale: LogQiEvalMod[0],
+		LevelQ: numLevelsAfterBoot + len(logQiSlotsToCoeffs) + len(logQiEvalMod),
+		LogScale: logQiEvalMod[0],
 		Mod1Type: mod1.CosDiscrete,
 		Mod1Degree: 30,
 		DoubleAngle: 3,
 		K: 16,
-		LogMessageRatio: 24 - LogN,
+		LogMessageRatio: 24 - logN,
 		Mod1InvDegree: 0,
 	}
 
@@ -89,12 +89,12 @@ func main() {
 	SlotsToCoeffsParameters := dft.MatrixLiteral{
 		Type: dft.HomomorphicDecode,
 		Format: dft.RepackImagAsReal,
-		LogSlots: LogN - 1,
-		LevelQ: numLevelsAfterBoot + len(LogQiSlotsToCoeffs),
+		LogSlots: logN - 1,
+		LevelQ: numLevelsAfterBoot + len(logQiSlotsToCoeffs),
 		LevelP: params.MaxLevelP(),
 		LogBSGSRatio: 1,
 		BitReversed: false,
-		Levels: make([]int, len(LogQiSlotsToCoeffs)),
+		Levels: make([]int, len(logQiSlotsToCoeffs)),
 	}
 	for i := range SlotsToCoeffsParameters.Levels {
 		SlotsToCoeffsParameters.Levels[i] = 1
@@ -107,7 +107,6 @@ func main() {
 		Mod1ParametersLiteral: Mod1ParametersLiteral,
 		CoeffsToSlotsParameters: CoeffsToSlotsParameters,
 		EphemeralSecretWeight: ephemeralSecretWeight,
-		CircuitOrder: bootstrapping.ModUpThenEncode,
 	}
 
 	// Key generation
@@ -122,8 +121,8 @@ func main() {
 
 	// Test
 
-	vecBeforeBoot := make([]complex128, 1<<(LogN-1))
-	vecBoot := make([]complex128, 1<<(LogN-1))
+	vecBeforeBoot := make([]complex128, 1<<(logN-1))
+	vecBoot := make([]complex128, 1<<(logN-1))
 	polyBeforeBoot := ckks.NewPlaintext(params, 0)
 
 	var totalScaleDown, totalModUp, totalCTS, totalEvalModRe,
