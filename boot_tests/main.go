@@ -20,7 +20,7 @@ func main() {
 
 	// Parameters
 
-	logN := 16
+	logN := 14
 	numLevelsAfterBoot := 1
 	longTermSecretWeight := 192
 	ephemeralSecretWeight := 32
@@ -33,12 +33,13 @@ func main() {
 	logQiSlotsToCoeffs := []int{39, 39, 39}
 	logQiEvalMod := []int{60, 60, 60, 60, 60, 60, 60, 60}
 	logQiCoeffsToSlots := []int{56, 56, 56, 56}
-	logP := []int{61, 61, 61, 61, 61}
 
 	logQ := append(logBaseQ, logQiAfterBoot...)
 	logQ = append(logQ, logQiSlotsToCoeffs...)
 	logQ = append(logQ, logQiEvalMod...)
 	logQ = append(logQ, logQiCoeffsToSlots...)
+
+	logP := []int{61, 61, 61, 61, 61}
 
 	logPQ := 0
 	for _, q := range logQ {logPQ += q}
@@ -66,13 +67,9 @@ func main() {
 		LogSlots: logN - 1,
 		LevelQ: params.MaxLevelQ(),
 		LevelP: params.MaxLevelP(),
-		LogBSGSRatio: 1,
-		BitReversed: false,
 		Levels: make([]int, len(logQiCoeffsToSlots)),
 	}
-	for i := range CoeffsToSlotsParameters.Levels {
-		CoeffsToSlotsParameters.Levels[i] = 1
-	}
+	for i := range CoeffsToSlotsParameters.Levels {CoeffsToSlotsParameters.Levels[i] = 1}
 
 	Mod1ParametersLiteral := mod1.ParametersLiteral{
 		LevelQ: numLevelsAfterBoot + len(logQiSlotsToCoeffs) + len(logQiEvalMod),
@@ -92,13 +89,9 @@ func main() {
 		LogSlots: logN - 1,
 		LevelQ: numLevelsAfterBoot + len(logQiSlotsToCoeffs),
 		LevelP: params.MaxLevelP(),
-		LogBSGSRatio: 1,
-		BitReversed: false,
 		Levels: make([]int, len(logQiSlotsToCoeffs)),
 	}
-	for i := range SlotsToCoeffsParameters.Levels {
-		SlotsToCoeffsParameters.Levels[i] = 1
-	}
+	for i := range SlotsToCoeffsParameters.Levels {SlotsToCoeffsParameters.Levels[i] = 1}
 
 	btpParams := bootstrapping.Parameters{
 		ResidualParameters: params,
@@ -159,9 +152,7 @@ func main() {
 
 	for i := range numBootRuns {
 		fmt.Printf("%3d | ", i+1)
-		for j := range vecBeforeBoot {
-			vecBeforeBoot[j] = complex(sampling.RandFloat64(-1, 1), 0)
-		}
+		for j := range vecBeforeBoot {vecBeforeBoot[j] = complex(sampling.RandFloat64(-1, 1), 0)}
 		encoder.Encode(vecBeforeBoot, polyBeforeBoot)
 		ctBeforeBoot, _ := encryptor.EncryptNew(polyBeforeBoot)
 
@@ -248,9 +239,7 @@ func main() {
 
 	for i := range numBootRuns {
 		fmt.Printf("%3d | ", i+1)
-		for j := range vecBeforeBoot {
-			vecBeforeBoot[j] = complex(sampling.RandFloat64(-1, 1), 0)
-		}
+		for j := range vecBeforeBoot {vecBeforeBoot[j] = complex(sampling.RandFloat64(-1, 1), 0)}
 		encoder.Encode(vecBeforeBoot, polyBeforeBoot)
 		ctBeforeBoot, _ := encryptor.EncryptNew(polyBeforeBoot)
 
