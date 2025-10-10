@@ -20,26 +20,29 @@ func main() {
 
 	// Parameters
 
-	logN := 14
+	logN := 12
 	numLevelsAfterBoot := 1
 	longTermSecretWeight := 192
 	ephemeralSecretWeight := 32
 	numBootRuns := 3
 
+	N := 1 << logN
+
 	logDefaultScale := 40
-	logBaseQ := []int{55}
+
+	logQBase := []int{55}
 	logQiAfterBoot := make([]int, numLevelsAfterBoot)
 	for i := range logQiAfterBoot {logQiAfterBoot[i] = logDefaultScale}
 	logQiSlotsToCoeffs := []int{39, 39, 39}
 	logQiEvalMod := []int{60, 60, 60, 60, 60, 60, 60, 60}
 	logQiCoeffsToSlots := []int{56, 56, 56, 56}
 
-	logQ := append(logBaseQ, logQiAfterBoot...)
+	logQ := append(logQBase, logQiAfterBoot...)
 	logQ = append(logQ, logQiSlotsToCoeffs...)
 	logQ = append(logQ, logQiEvalMod...)
 	logQ = append(logQ, logQiCoeffsToSlots...)
 
-	logP := []int{61, 61, 61, 61, 61}
+	logP := []int{61, 61, 61}
 
 	logPQ := 0
 	for _, q := range logQ {logPQ += q}
@@ -49,8 +52,8 @@ func main() {
 	fmt.Printf("logN = %d, logPQ = %d, logModulusBeforeBoot = %d, logModulusAfterBoot = %d\n\n",
 		logN,
 		logPQ,
-		logBaseQ[0],
-		logBaseQ[0] + logDefaultScale * numLevelsAfterBoot,
+		logQBase[0],
+		logQBase[0] + logDefaultScale * numLevelsAfterBoot,
 	)
 
 	params, _ := ckks.NewParametersFromLiteral(ckks.ParametersLiteral{
@@ -82,7 +85,6 @@ func main() {
 		Mod1InvDegree: 0,
 	}
 
-	// Same parameters are used for SCORE
 	SlotsToCoeffsParameters := dft.MatrixLiteral{
 		Type: dft.HomomorphicDecode,
 		Format: dft.RepackImagAsReal,
@@ -90,7 +92,7 @@ func main() {
 		LevelQ: numLevelsAfterBoot + len(logQiSlotsToCoeffs),
 		LevelP: params.MaxLevelP(),
 		Levels: make([]int, len(logQiSlotsToCoeffs)),
-	}
+	} // Also for SCORE
 	for i := range SlotsToCoeffsParameters.Levels {SlotsToCoeffsParameters.Levels[i] = 1}
 
 	btpParams := bootstrapping.Parameters{
@@ -114,8 +116,8 @@ func main() {
 
 	// Test
 
-	vecBeforeBoot := make([]complex128, 1<<(logN-1))
-	vecBoot := make([]complex128, 1<<(logN-1))
+	vecBeforeBoot := make([]complex128, N/2)
+	vecBoot := make([]complex128, N/2)
 	polyBeforeBoot := ckks.NewPlaintext(params, 0)
 
 	var totalScaleDown, totalModUp, totalCTS, totalEvalModRe,
@@ -127,14 +129,14 @@ func main() {
 	fmt.Println("╚══════════════════════╝")
 	fmt.Println()
 
-	totalScaleDown = 0.0
-	totalModUp = 0.0
-	totalCTS = 0.0
-	totalEvalModRe = 0.0
-	totalEvalModIm = 0.0
-	totalSTC = 0.0
-	totalBoot = 0.0
-	totalPrec = 0.0
+	totalScaleDown = 0
+	totalModUp = 0
+	totalCTS = 0
+	totalEvalModRe = 0
+	totalEvalModIm = 0
+	totalSTC = 0
+	totalBoot = 0
+	totalPrec = 0
 
 	header = fmt.Sprintf(
 		"Run | %13s | %13s | %13s | %13s | %13s | %13s | %13s | %13s",
@@ -150,9 +152,9 @@ func main() {
 	fmt.Println(header)
 	fmt.Println(strings.Repeat("─", len(header)))
 
-	for i := range numBootRuns {
-		fmt.Printf("%3d | ", i+1)
-		for j := range vecBeforeBoot {vecBeforeBoot[j] = complex(sampling.RandFloat64(-1, 1), 0)}
+	for run := range numBootRuns {
+		fmt.Printf("%3d | ", run+1)
+		for i := range vecBeforeBoot {vecBeforeBoot[i] = complex(sampling.RandFloat64(-1, 1), 0)}
 		encoder.Encode(vecBeforeBoot, polyBeforeBoot)
 		ctBeforeBoot, _ := encryptor.EncryptNew(polyBeforeBoot)
 

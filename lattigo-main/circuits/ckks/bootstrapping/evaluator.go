@@ -131,11 +131,10 @@ func NewEvaluator(btpParams Parameters, evk *EvaluationKeys) (eval *Evaluator, e
 	return
 }
 
-// NewSCOREEvaluator creates an Evaluator that is initialized only for the SCORE transformation
-func NewSCOREEvaluator(btpParams Parameters, evk *EvaluationKeys) (eval *Evaluator, err error) {
-
-    eval = &Evaluator{}
-
+// NewSlotsToCoeffsEvaluator creates an Evaluator initialized for both SlotsToCoeffs and SCORE transformations
+func NewSlotsToCoeffsEvaluator(btpParams Parameters, evk *EvaluationKeys) (*Evaluator, error) {
+    var err error
+    eval := &Evaluator{}
     eval.Parameters = btpParams
 
     params := btpParams.BootstrappingParameters
@@ -151,6 +150,7 @@ func NewSCOREEvaluator(btpParams Parameters, evk *EvaluationKeys) (eval *Evaluat
     }
 
     encoder := ckks.NewEncoder(params)
+
     if eval.S2CDFTMatrix, err = dft.NewMatrixFromLiteral(params, eval.SlotsToCoeffsParameters, encoder); err != nil {
         return nil, err
     }
@@ -161,7 +161,7 @@ func NewSCOREEvaluator(btpParams Parameters, evk *EvaluationKeys) (eval *Evaluat
         return nil, err
     }
 
-    eval.pool = rlwe.NewPool(eval.BootstrappingParameters.RingQP())
+    eval.pool = rlwe.NewPool(params.RingQP())
 
     return eval, nil
 }
