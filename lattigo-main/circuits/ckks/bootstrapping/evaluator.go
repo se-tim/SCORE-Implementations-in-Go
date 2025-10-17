@@ -131,7 +131,7 @@ func NewEvaluator(btpParams Parameters, evk *EvaluationKeys) (eval *Evaluator, e
 	return
 }
 
-// NewSlotsToCoeffsEvaluator creates an Evaluator initialized for both SlotsToCoeffs and SCORE transformations
+// NewSlotsToCoeffsEvaluator creates an Evaluator initialized for both SlotsToCoeffs and SCORE transformations.
 func NewSlotsToCoeffsEvaluator(btpParams Parameters, evk *EvaluationKeys) (*Evaluator, error) {
     var err error
     eval := &Evaluator{}
@@ -656,6 +656,7 @@ func (eval Evaluator) ScaleDown(ctIn *rlwe.Ciphertext) (*rlwe.Ciphertext, *rlwe.
 
 // ModUp raise the modulus from q to Q, scales the message  and applies the Trace if the ciphertext is sparsely packed.
 func (eval Evaluator) ModUp(ctIn *rlwe.Ciphertext) (ctOut *rlwe.Ciphertext, err error) {
+
 	// Switch to the sparse key
 	if eval.EvkDenseToSparse != nil {
 		if err := eval.ApplyEvaluationKey(ctIn, eval.EvkDenseToSparse, ctIn); err != nil {

@@ -312,7 +312,7 @@ func (eval *Evaluator) SCORENew(ctIn *rlwe.Ciphertext, SCOREMatrices Matrix) (ct
 	return ctOut, eval.SCORE(ctIn, SCOREMatrices, ctOut)
 }
 
-// See explanation in SCORENew.
+// See above.
 func (eval *Evaluator) SCORE(ctIn *rlwe.Ciphertext, SCOREMatrices Matrix, ctOut *rlwe.Ciphertext) (err error) {
 
 	ct := ctIn.CopyNew()
@@ -804,7 +804,7 @@ func (d MatrixLiteral) GenMatrices(LogN int, prec uint) (plainVector []ltcommon.
 		}
 	}
 
-	// First column of first matrix scaled by 1/2
+	// For SCORE, the first column of first matrix is scaled by 1/2.
 	if ltType == HomomorphicDecode && d.SCORE != nil && d.SCORE.DecodeHalfScale {
 		A := plainVector[0]
 		n := len(A[0])

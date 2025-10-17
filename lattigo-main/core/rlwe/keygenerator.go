@@ -96,28 +96,27 @@ func (kgen KeyGenerator) GenKeyPairNew() (sk *SecretKey, pk *PublicKey) {
 	return
 }
 
-// GenSPRUSecretKeyNew generates a [SecretKey] and a corresponding [PublicKey]
-// The secret key follows the structure required for SPRU
-func (kgen KeyGenerator) GenSPRUSecretKeyNew(hw int) (sk *SecretKey) {
+// GenSPRUSecretKeyNew generates a [SecretKey] for SPRU.
+func (kgen KeyGenerator) GenSPRUSecretKeyNew(secretWeight int) (sk *SecretKey) {
 	sk = NewSecretKey(kgen.params)
-	kgen.GenSPRUSecretKey(hw, sk)
+	kgen.GenSPRUSecretKey(secretWeight, sk)
 	return
 }
 
 // See above.
-func (kgen KeyGenerator) GenSPRUSecretKey(hw int, sk *SecretKey) {
+func (kgen KeyGenerator) GenSPRUSecretKey(secretWeight int, sk *SecretKey) {
 	ringQP := kgen.params.RingQP().AtLevel(sk.LevelQ(), sk.LevelP())
 	ringQ := ringQP.RingQ
 
 	N := ringQ.N()
 
-	for j := 0; j < len(sk.Value.Q.Coeffs); j++ {
+	for j := range sk.Value.Q.Coeffs {
 		coeffs := sk.Value.Q.Coeffs[j]
 		for i := range N { coeffs[i] = 0 }
 	}
 
-	B := N / hw
-	for b := range hw {
+	B := N / secretWeight
+	for b := range secretWeight {
 		j := big.NewInt(0)
 		if b != 0 {
 			j = sampling.RandInt(big.NewInt(int64(B)))
@@ -135,10 +134,11 @@ func (kgen KeyGenerator) GenSPRUSecretKey(hw int, sk *SecretKey) {
 	ringQP.MForm(sk.Value, sk.Value)
 }
 
+// GenSPRUKeyPairNew generates a new SPRU [SecretKey] and a corresponding SPRU [PublicKey].
 func (kgen KeyGenerator) GenSPRUKeyPairNew() (sk *SecretKey, pk *PublicKey) {
-	h := kgen.params.XsHammingWeight()
+	secretWeight := kgen.params.XsHammingWeight()
 	sk = NewSecretKey(kgen.params)
-	kgen.GenSPRUSecretKey(h, sk)
+	kgen.GenSPRUSecretKey(secretWeight, sk)
 	pk = kgen.GenPublicKeyNew(sk)
 	return
 }
