@@ -16,39 +16,16 @@ import (
 	"github.com/tuneinsight/lattigo/v6/utils/sampling"
 )
 
-var bitReverseCache = make(map[[2]int]int)
-func bitReverse(x, logN int) int {
-	key := [2]int{x, logN}
-	if val, ok := bitReverseCache[key]; ok {return val}
-	res := 0
-	for i := range logN {if (x>>i)&1 == 1 {res |= 1 << (logN - 1 - i)}}
-	bitReverseCache[key] = res
-	return res
-}
-
-var extendedBitReverseCache = make(map[[2]int]int)
-func extendedBitReverse(x, logN int) int {
-	key := [2]int{x, logN}
-	if val, ok := extendedBitReverseCache[key]; ok {return val}
-	N := 1 << logN
-	res := (x/N)*N + bitReverse(x%N, logN)
-	extendedBitReverseCache[key] = res
-	return res
-}
-
-// Computes exp(2*pi*i * x/q)
-func psi(x int64, q int64) complex128 {
-	return cmplx.Rect(1, 2*math.Pi*float64(x)/float64(q))
-}
-
 func main() {
-	runtime.GOMAXPROCS(1)
+	runtime.GOMAXPROCS(1) // Only one thread for reproducibility
+
+	// Parameters
 
 	logN := 13
 	numLevelsAfterBoot := 1
 	logSecretWeight := 6
 	logNumSlots := logN - logSecretWeight - 2
-	numBootRuns := 2
+	numBootRuns := 2 // How many tests to perform
 
 	N := 1 << logN
 	n := 1 << logNumSlots
@@ -67,7 +44,7 @@ func main() {
 	for i := range logQiAfterBoot {logQiAfterBoot[i] = logDefaultScale}
 	var logQiSlotsToCoeffs []int
 	if logNumSlots <= 6 {logQiSlotsToCoeffs = []int{39}} else {logQiSlotsToCoeffs = []int{39, 39}}
-	logQiRemaining := make([]int, 1+logSecretWeight+1) // STC, product tree, cs products
+	logQiRemaining := make([]int, 1+logSecretWeight+1) // For cs products, product tree, preparing STC
 	for i := range logQiRemaining {logQiRemaining[i] = logBootScale}
 
 	logQ := append(logQBase, logQiAfterBoot...)
@@ -77,12 +54,12 @@ func main() {
 	logP := []int{61, 61, 61}
 
 	logPQ_SPRU := 0
-	for _, q := range logQ {logPQ_SPRU += q}
-	for _, p := range logP {logPQ_SPRU += p}
+	for _, Q := range logQ {logPQ_SPRU += Q}
+	for _, P := range logP {logPQ_SPRU += P}
 	logPQ_RSPRU := logPQ_SPRU - logBootScale // No preparation for SCORE required
 
 	println()
-	fmt.Printf("logN = %d, logPQ_SPRU = %d, logPQ_RSPRU = %d,logModulusBeforeBoot = %d, logModulusAfterBoot = %d\n\n",
+	fmt.Printf("logN = %d, logPQ_SPRU = %d, logPQ_RSPRU = %d, logQBeforeBoot = %d, logQAfterBoot = %d\n\n",
 		logN,
 		logPQ_SPRU,
 		logPQ_RSPRU,
@@ -107,41 +84,40 @@ func main() {
 	} // Also for SCORE
 	for i := range SlotsToCoeffsParameters.Levels {SlotsToCoeffsParameters.Levels[i] = 1}
 	
-	btpParams := bootstrapping.Parameters{
+	bootParams := bootstrapping.Parameters{
 		ResidualParameters: params,
 		BootstrappingParameters: params,
 		SlotsToCoeffsParameters: SlotsToCoeffsParameters,
 	}
 
+	// Key generation & alike
+
 	kgen := rlwe.NewKeyGenerator(params)
 	sk, pk := kgen.GenSPRUKeyPairNew()
 	rlk := kgen.GenRelinearizationKeyNew(sk)
 	encoder := ckks.NewEncoder(params)
-	decryptor := rlwe.NewDecryptor(params, sk)
 	encryptor := rlwe.NewEncryptor(params, pk)
+	decryptor := rlwe.NewDecryptor(params, sk)
+	evk, _, _ := bootParams.GenEvaluationKeys(sk)
+	eval, _ := bootstrapping.NewSlotsToCoeffsEvaluator(bootParams, evk)
 
-	evk, _, _ := btpParams.GenEvaluationKeys(sk)
-	eval, _ := bootstrapping.NewSlotsToCoeffsEvaluator(btpParams, evk)
-
-	galoisElem := make([]uint64, logN+1)
+	galoisElem := make([]uint64, logN+1) // For rotations and conjugation
 	for i := range logN {galoisElem[i] = params.GaloisElementForRotation(1 << i)}
 	galoisElem[logN] = params.GaloisElementForComplexConjugation()
 	galoisKeys := kgen.GenGaloisKeysNew(galoisElem, sk)
 	defaultEval := ckks.NewEvaluator(params, rlwe.NewMemEvaluationKeySet(rlk, galoisKeys...))
 
-	baseRing := params.RingQ().AtLevel(0)
-	baseQ := int64(params.Q()[0])
+	// Bootstrapping keys cs for SPRU
 
+	baseRing := params.RingQ().AtLevel(0)
 	sk_INTT := *sk.Value.Q.CopyNew()
 	baseRing.INTT(sk_INTT, sk_INTT)
 	baseRing.IMForm(sk_INTT, sk_INTT)
 
-	// Bootstrapping keys cs for SPRU
-
 	csEncryptions_SPRU := make([]*rlwe.Ciphertext, 4*n)
-	for u := range (4 * n) {
+	for u := range (4*n) {
 		s := make([]complex128, 1<<(logN-1))
-		for a := range (2 * n) {
+		for a := range (2*n) {
 			for b := range secretWeight {
 				for k := range Bover4n {
 					i := 2*k*n*secretWeight + 2*b*n + a
@@ -157,8 +133,10 @@ func main() {
 		csEncryptions_SPRU[u] = cs
 	}
 
+	// Bootstrapping keys cs for R-SPRU
+
 	csEncryptions_RSPRU := make([]*rlwe.Ciphertext, 2*n)
-	for u := range (2 * n) {
+	for u := range (2*n) {
 		s := make([]complex128, 1<<(logN-1))
 		for a := range n {
 			for b := range secretWeight {
@@ -169,25 +147,25 @@ func main() {
 				}
 			}
 		}
-		sPoly := ckks.NewPlaintext(params, params.MaxLevel())
+		sPoly := ckks.NewPlaintext(params, params.MaxLevel()-1)
 		sPoly.Scale = rlwe.NewScale(math.Exp2(float64(logBootScale)))
 		encoder.Encode(s, sPoly)
 		cs, _ := encryptor.EncryptNew(sPoly)
 		csEncryptions_RSPRU[u] = cs
 	}
 
-	// Bootstrapping keys cs for R-SPRU
-
 	// Miscellaneous precomputations
 
-	logExpScale := float64(logQBase[0]) - float64((1<<logSecretWeight)+logBootScale) - math.Log2(4*math.Pi)
-	expScale := complex(math.Exp2(logExpScale / float64(secretWeight)), 0) // delta in paper
+	baseQ := int64(params.Q()[0])
+
+	logExpScale := float64(logQBase[0]) - float64(logBootScale) - math.Log2(4*math.Pi)
+	expScale := complex(math.Exp2(logExpScale / float64(secretWeight)), 0) / 2 // Called delta in paper
 
 	maskVec := make([]complex128, N/2)
 	for i := range (N/2) {if (i/n)%2 == 0 {maskVec[i] = 1} else {maskVec[i] = 1i}}
 	maskPoly := ckks.NewPlaintext(params, params.MaxLevel())
 	maskPoly.Scale = bootScale
-	encoder.Encode(maskVec, maskPoly) // Required before applying SlotsToCoeffs
+	encoder.Encode(maskVec, maskPoly) // Required before applying SlotsToCoeffs in SPRU
 	
 	// Test
 
@@ -242,9 +220,9 @@ func main() {
 		baseRing.INTT(c1_INTT, c1_INTT)
 
 		eEncodings := make([]*rlwe.Plaintext, 4*n)
-		for u := range (4 * n) {
+		for u := range (4*n) {
 			e := make([]complex128, N/2)
-			for a := range (2 * n) {
+			for a := range (2*n) {
 				k := a * N / (2 * n)
 				for b := range secretWeight {
 					for l := range Bover4n {
@@ -273,7 +251,7 @@ func main() {
 		t1 := time.Now()
 
 		ctBoot := rlwe.NewCiphertext(params, 1, params.MaxLevel())
-		for u := range (4 * n) {
+		for u := range (4*n) {
 			term, _ := defaultEval.MulNew(csEncryptions_SPRU[u], eEncodings[u])
 			defaultEval.Rescale(term, term)
 			if u == 0 {ctBoot = term} else {ctBoot, _ = defaultEval.AddNew(ctBoot, term)}
@@ -309,11 +287,10 @@ func main() {
 		defaultEval.Rescale(ctBoot, ctBoot)
 		ctRot, _ := defaultEval.RotateNew(ctBoot, n)
 		ctBoot, _ = defaultEval.AddNew(ctBoot, ctRot)
-		ctBoot, err := eval.SlotsToCoeffs(ctBoot, nil)
-		if err != nil {panic(err)}
+		ctBoot, _ = eval.SlotsToCoeffs(ctBoot, nil)
 		ctBoot.Scale = defaultScale
 
-		// Computing timings
+		// Computing the timings
 
 		t5 := time.Now()
 
@@ -337,7 +314,13 @@ func main() {
 		totalPrec += prec
 
 		fmt.Printf("%13.3f | %13.3f | %13.3f | %13.3f | %13.3f | %13.3f | %8.1f bits\n",
-			timeEncoding, timeCSProd, timeTrace, timeProdTree, timeSTC, timeBoot, prec,
+			timeEncoding,
+			timeCSProd,
+			timeTrace,
+			timeProdTree,
+			timeSTC,
+			timeBoot,
+			prec,
 		)
 	}
 
@@ -395,7 +378,7 @@ func main() {
 		baseRing.INTT(c1_INTT, c1_INTT)
 
 		eEncodings := make([]*rlwe.Plaintext, 2*n)
-		for u := range (2 * n) {
+		for u := range (2*n) {
 			e := make([]complex128, N/2)
 			for a := range n {
 				k := a * N / (2 * n)
@@ -426,7 +409,7 @@ func main() {
 		t1 := time.Now()
 
 		ctBoot := rlwe.NewCiphertext(params, 1, params.MaxLevel())
-		for u := range (2 * n) {
+		for u := range (2*n) {
 			term, _ := defaultEval.MulNew(csEncryptions_RSPRU[u], eEncodings[u])
 			defaultEval.Rescale(term, term)
 			if u == 0 {ctBoot = term} else {ctBoot, _ = defaultEval.AddNew(ctBoot, term)}
@@ -461,7 +444,7 @@ func main() {
 		ctBoot, _ = eval.SCORE(ctBoot)
 		ctBoot.Scale = rlwe.NewScale(math.Exp2(float64(logDefaultScale)))
 
-		// Computing timings
+		// Computing the timings
 
 		t5 := time.Now()
 
@@ -485,7 +468,13 @@ func main() {
 		totalPrec += prec
 
 		fmt.Printf("%13.3f | %13.3f | %13.3f | %13.3f | %13.3f | %13.3f | %8.1f bits\n",
-			timeEncoding, timeCSProd, timeTrace, timeProdTree, timeSCORE, timeBoot, prec,
+			timeEncoding,
+			timeCSProd,
+			timeTrace,
+			timeProdTree,
+			timeSCORE,
+			timeBoot,
+			prec,
 		)
 	}
 
@@ -499,4 +488,29 @@ func main() {
 		totalBoot/float64(numBootRuns),
 		totalPrec/float64(numBootRuns),
 	)
+}
+
+var bitReverseCache = make(map[[2]int]int)
+func bitReverse(x, logN int) int {
+	key := [2]int{x, logN}
+	if val, ok := bitReverseCache[key]; ok {return val}
+	res := 0
+	for i := range logN {if (x>>i)&1 == 1 {res |= 1 << (logN - 1 - i)}}
+	bitReverseCache[key] = res
+	return res
+}
+
+var extendedBitReverseCache = make(map[[2]int]int)
+func extendedBitReverse(x, logN int) int {
+	key := [2]int{x, logN}
+	if val, ok := extendedBitReverseCache[key]; ok {return val}
+	N := 1 << logN
+	res := (x/N)*N + bitReverse(x%N, logN)
+	extendedBitReverseCache[key] = res
+	return res
+}
+
+// Computes exp(2*pi*i * x/q)
+func psi(x int64, q int64) complex128 {
+	return cmplx.Rect(1, 2*math.Pi*float64(x)/float64(q))
 }

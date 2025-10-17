@@ -16,7 +16,7 @@ import (
 )
 
 func main() {
-	runtime.GOMAXPROCS(1)
+	runtime.GOMAXPROCS(1) // Only one thread for reproducibility
 
 	// Parameters
 
@@ -24,7 +24,7 @@ func main() {
 	numLevelsAfterBoot := 1
 	longTermSecretWeight := 192
 	ephemeralSecretWeight := 32
-	numBootRuns := 3
+	numBootRuns := 3 // How many tests to perform
 
 	N := 1 << logN
 
@@ -45,11 +45,11 @@ func main() {
 	logP := []int{61, 61, 61}
 
 	logPQ := 0
-	for _, q := range logQ {logPQ += q}
-	for _, p := range logP {logPQ += p}
+	for _, Q := range logQ {logPQ += Q}
+	for _, P := range logP {logPQ += P}
 
 	println()
-	fmt.Printf("logN = %d, logPQ = %d, logModulusBeforeBoot = %d, logModulusAfterBoot = %d\n\n",
+	fmt.Printf("logN = %d, logPQ = %d, logQBeforeBoot = %d, logQAfterBoot = %d\n\n",
 		logN,
 		logPQ,
 		logQBase[0],
@@ -95,7 +95,7 @@ func main() {
 	} // Also for SCORE
 	for i := range SlotsToCoeffsParameters.Levels {SlotsToCoeffsParameters.Levels[i] = 1}
 
-	btpParams := bootstrapping.Parameters{
+	bootParams := bootstrapping.Parameters{
 		ResidualParameters: params,
 		BootstrappingParameters: params,
 		SlotsToCoeffsParameters: SlotsToCoeffsParameters,
@@ -104,15 +104,15 @@ func main() {
 		EphemeralSecretWeight: ephemeralSecretWeight,
 	}
 
-	// Key generation
+	// Key generation & alike
 
 	kgen := rlwe.NewKeyGenerator(params)
 	sk, pk := kgen.GenKeyPairNew()
 	encoder := ckks.NewEncoder(params)
 	encryptor := rlwe.NewEncryptor(params, pk)
 	decryptor := rlwe.NewDecryptor(params, sk)
-	evk, _, _ := btpParams.GenEvaluationKeys(sk)
-	eval, _ := bootstrapping.NewEvaluator(btpParams, evk)
+	evk, _, _ := bootParams.GenEvaluationKeys(sk)
+	eval, _ := bootstrapping.NewEvaluator(bootParams, evk)
 
 	// Test
 
@@ -196,7 +196,14 @@ func main() {
 		totalPrec += prec
 
 		fmt.Printf("%13.3f | %13.3f | %13.3f | %13.3f | %13.3f | %13.3f | %13.3f | %8.1f bits\n",
-			timeScaleDown, timeModUp, timeCTS, timeEvalModRe, timeEvalModIm, timeSTC, timeBoot, prec,
+			timeScaleDown,
+			timeModUp,
+			timeCTS,
+			timeEvalModRe,
+			timeEvalModIm,
+			timeSTC,
+			timeBoot,
+			prec,
 		)
 	}
 
@@ -277,7 +284,14 @@ func main() {
 		totalPrec += prec
 
 		fmt.Printf("%13.3f | %13.3f | %13.3f | %13.3f | %13s | %13.3f | %13.3f | %8.1f bits\n",
-			timeScaleDown, timeModUp, timeCTS, timeEvalModRe, "", timeSCORE, timeBoot, prec,
+			timeScaleDown,
+			timeModUp,
+			timeCTS,
+			timeEvalModRe,
+			"",
+			timeSCORE,
+			timeBoot,
+			prec,
 		)
 	}
 
