@@ -8,19 +8,19 @@
 
 All modifications are summarized here; the original files remain unaltered elsewhere.
 
-### `circuits/ckks/bootstrapping/evaluator.go`
+**`circuits/ckks/bootstrapping/evaluator.go`**:
 - Added `SCOREMatrix` field to `Evaluator`.
 - Added new constructor `NewSlotsToCoeffsEvaluator()` to create an evaluator for both SlotsToCoeffs and SCORE.
 - Updated `Evaluator.initialize()` to build SCORE matrices when the parameters are set.
 - Added new method `Evaluator.SCORE()` for SCORE transformation.
 
-### `circuits/ckks/dft/dft.go`
+**`circuits/ckks/dft/dft.go`**:
 - Extended `MatrixLiteral` with `SCORE *SCOREOptions`.
 - Added `SCOREOptions` structure.
 - Added new methods `Evaluator.SCORENew()` and `Evaluator.SCORE()` implementing the SCORE transformation.
 - Added SCORE-specific scaling logic in `MatrixLiteral.GenMatrices()`.
 
-### `core/rlwe/keygenerator.go`
+**`core/rlwe/keygenerator.go`**:
 - Added SPRU key generation helpers:
   - `KeyGenerator.GenSPRUSecretKeyNew()`
   - `KeyGenerator.GenSPRUSecretKey()`

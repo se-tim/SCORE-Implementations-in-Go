@@ -24,8 +24,16 @@ func main() {
 	logN := 13
 	numLevelsAfterBoot := 1
 	logSecretWeight := 6
-	logNumSlots := logN - logSecretWeight - 2
-	numBootRuns := 2 // How many tests to perform
+	
+	var numBootRuns int
+	fmt.Print("Enter the number of runs: ")
+	fmt.Scanf("%d", &numBootRuns)
+
+	var logNumSlots int
+	fmt.Print("Enter the number of slots: 2**")
+	fmt.Scanf("%d", &logNumSlots)
+	if logNumSlots > logN-logSecretWeight-2 {logNumSlots = logN - logSecretWeight - 2}
+	if logNumSlots < 0 {logNumSlots = 0}
 
 	N := 1 << logN
 	n := 1 << logNumSlots
@@ -59,8 +67,9 @@ func main() {
 	logPQ_RSPRU := logPQ_SPRU - logBootScale // No preparation for SCORE required
 
 	println()
-	fmt.Printf("logN = %d, logPQ_SPRU = %d, logPQ_RSPRU = %d, logQBeforeBoot = %d, logQAfterBoot = %d\n\n",
+	fmt.Printf("logN = %d, logNumSlots = %d, logPQ_SPRU = %d, logPQ_RSPRU = %d, logQBeforeBoot = %d, logQAfterBoot = %d\n\n",
 		logN,
+		logNumSlots,
 		logPQ_SPRU,
 		logPQ_RSPRU,
 		logQBase[0],
@@ -253,9 +262,9 @@ func main() {
 		ctBoot := rlwe.NewCiphertext(params, 1, params.MaxLevel())
 		for u := range (4*n) {
 			term, _ := defaultEval.MulNew(csEncryptions_SPRU[u], eEncodings[u])
-			defaultEval.Rescale(term, term)
 			if u == 0 {ctBoot = term} else {ctBoot, _ = defaultEval.AddNew(ctBoot, term)}
 		}
+		defaultEval.Rescale(ctBoot, ctBoot)
 
 		// Trace
 
@@ -411,9 +420,9 @@ func main() {
 		ctBoot := rlwe.NewCiphertext(params, 1, params.MaxLevel())
 		for u := range (2*n) {
 			term, _ := defaultEval.MulNew(csEncryptions_RSPRU[u], eEncodings[u])
-			defaultEval.Rescale(term, term)
 			if u == 0 {ctBoot = term} else {ctBoot, _ = defaultEval.AddNew(ctBoot, term)}
 		}
+		defaultEval.Rescale(ctBoot, ctBoot)
 
 		// Trace
 

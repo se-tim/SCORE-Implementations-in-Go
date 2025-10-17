@@ -24,7 +24,10 @@ func main() {
 	numLevelsAfterBoot := 1
 	longTermSecretWeight := 192
 	ephemeralSecretWeight := 32
-	numBootRuns := 3 // How many tests to perform
+
+	var numBootRuns int
+	fmt.Print("Enter the number of runs: ")
+	fmt.Scanf("%d", &numBootRuns)
 
 	N := 1 << logN
 
