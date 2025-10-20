@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -20,14 +21,17 @@ func main() {
 
 	// Parameters
 
-	logN := 12
-	numLevelsAfterBoot := 1
+	logN := 16
 	longTermSecretWeight := 192
 	ephemeralSecretWeight := 32
 
 	var numBootRuns int
 	fmt.Print("Enter the number of runs: ")
 	fmt.Scanf("%d", &numBootRuns)
+
+	var numLevelsAfterBoot int
+	fmt.Print("Enter the number of levels after bootstrapping: ")
+	fmt.Scanf("%d", &numLevelsAfterBoot)
 
 	N := 1 << logN
 
@@ -155,8 +159,8 @@ func main() {
 	fmt.Println(header)
 	fmt.Println(strings.Repeat("─", len(header)))
 
-	for run := range numBootRuns {
-		fmt.Printf("%3d | ", run+1)
+	for run := range numBootRuns+1 {
+		if run > 0 {fmt.Printf("%3d | ", run)} // Ignore the warm-up run
 		for i := range vecBeforeBoot {vecBeforeBoot[i] = complex(sampling.RandFloat64(-1, 1), 0)}
 		encoder.Encode(vecBeforeBoot, polyBeforeBoot)
 		ctBeforeBoot, _ := encryptor.EncryptNew(polyBeforeBoot)
@@ -185,29 +189,34 @@ func main() {
 		timeSTC := t6.Sub(t5).Seconds()
 		timeBoot := t6.Sub(t0).Seconds()
 
-		totalScaleDown += timeScaleDown
-		totalModUp += timeModUp
-		totalCTS += timeCTS
-		totalEvalModRe += timeEvalModRe
-		totalEvalModIm += timeEvalModIm
-		totalSTC += timeSTC
-		totalBoot += timeBoot
+		if run > 0 {
+			totalScaleDown += timeScaleDown
+			totalModUp += timeModUp
+			totalCTS += timeCTS
+			totalEvalModRe += timeEvalModRe
+			totalEvalModIm += timeEvalModIm
+			totalSTC += timeSTC
+			totalBoot += timeBoot
 
-		encoder.Decode(decryptor.DecryptNew(ctBoot), vecBoot)
-		stats := ckks.GetPrecisionStats(params, encoder, nil, vecBeforeBoot, vecBoot, 0, false)
-		prec := stats.AVGLog2Prec.Real
-		totalPrec += prec
+			encoder.Decode(decryptor.DecryptNew(ctBoot), vecBoot)
+			stats := ckks.GetPrecisionStats(params, encoder, nil, vecBeforeBoot, vecBoot, 0, false)
+			prec := stats.AVGLog2Prec.Real
+			totalPrec += prec
 
-		fmt.Printf("%13.3f | %13.3f | %13.3f | %13.3f | %13.3f | %13.3f | %13.3f | %8.1f bits\n",
-			timeScaleDown,
-			timeModUp,
-			timeCTS,
-			timeEvalModRe,
-			timeEvalModIm,
-			timeSTC,
-			timeBoot,
-			prec,
-		)
+			fmt.Printf("%13.3f | %13.3f | %13.3f | %13.3f | %13.3f | %13.3f | %13.3f | %8.1f bits\n",
+				timeScaleDown,
+				timeModUp,
+				timeCTS,
+				timeEvalModRe,
+				timeEvalModIm,
+				timeSTC,
+				timeBoot,
+				prec,
+			)
+		}
+
+		runtime.GC()
+		debug.FreeOSMemory()
 	}
 
 	fmt.Println(strings.Repeat("─", len(header)))
@@ -249,8 +258,8 @@ func main() {
 	fmt.Println(header)
 	fmt.Println(strings.Repeat("─", len(header)))
 
-	for i := range numBootRuns {
-		fmt.Printf("%3d | ", i+1)
+	for run := range numBootRuns+1 {
+		if run > 0 {fmt.Printf("%3d | ", run)} // Ignore the warm-up run
 		for j := range vecBeforeBoot {vecBeforeBoot[j] = complex(sampling.RandFloat64(-1, 1), 0)}
 		encoder.Encode(vecBeforeBoot, polyBeforeBoot)
 		ctBeforeBoot, _ := encryptor.EncryptNew(polyBeforeBoot)
@@ -274,28 +283,33 @@ func main() {
 		timeSCORE := t5.Sub(t4).Seconds()
 		timeBoot := t5.Sub(t0).Seconds()
 
-		totalScaleDown += timeScaleDown
-		totalModUp += timeModUp
-		totalCTS += timeCTS
-		totalEvalModRe += timeEvalModRe
-		totalSCORE += timeSCORE
-		totalBoot += timeBoot
+		if run > 0 {
+			totalScaleDown += timeScaleDown
+			totalModUp += timeModUp
+			totalCTS += timeCTS
+			totalEvalModRe += timeEvalModRe
+			totalSCORE += timeSCORE
+			totalBoot += timeBoot
 
-		encoder.Decode(decryptor.DecryptNew(ctBoot), vecBoot)
-		stats := ckks.GetPrecisionStats(params, encoder, nil, vecBeforeBoot, vecBoot, 0, false)
-		prec := stats.AVGLog2Prec.Real
-		totalPrec += prec
+			encoder.Decode(decryptor.DecryptNew(ctBoot), vecBoot)
+			stats := ckks.GetPrecisionStats(params, encoder, nil, vecBeforeBoot, vecBoot, 0, false)
+			prec := stats.AVGLog2Prec.Real
+			totalPrec += prec
 
-		fmt.Printf("%13.3f | %13.3f | %13.3f | %13.3f | %13s | %13.3f | %13.3f | %8.1f bits\n",
-			timeScaleDown,
-			timeModUp,
-			timeCTS,
-			timeEvalModRe,
-			"",
-			timeSCORE,
-			timeBoot,
-			prec,
-		)
+			fmt.Printf("%13.3f | %13.3f | %13.3f | %13.3f | %13s | %13.3f | %13.3f | %8.1f bits\n",
+				timeScaleDown,
+				timeModUp,
+				timeCTS,
+				timeEvalModRe,
+				"",
+				timeSCORE,
+				timeBoot,
+				prec,
+			)
+		}
+
+		runtime.GC()
+		debug.FreeOSMemory()
 	}
 
 	fmt.Println(strings.Repeat("─", len(header)))

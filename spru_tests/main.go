@@ -213,7 +213,7 @@ func main() {
 	fmt.Println(strings.Repeat("─", len(header)))
 
 	for run := range numBootRuns+1 {
-		if run > 0 {fmt.Printf("%3d | ", run)} // Ignore the first run
+		if run > 0 {fmt.Printf("%3d | ", run)} // Ignore the warm-up run
 		for i := range n {vecBeforeBoot[i] = complex(sampling.RandFloat64(-1, 1), 0)}
 		for i := n; i < len(vecBeforeBoot); i++ {vecBeforeBoot[i] = vecBeforeBoot[i%n]}
 		encoder.Encode(vecBeforeBoot, polyBeforeBoot)
@@ -376,7 +376,7 @@ func main() {
 	fmt.Println(strings.Repeat("─", len(header)))
 
 	for run := range numBootRuns+1 {
-		if run > 0 {fmt.Printf("%3d | ", run)} // Ignore the first run
+		if run > 0 {fmt.Printf("%3d | ", run)} // Ignore the warm-up run
 		for i := range n {vecBeforeBoot[i] = complex(sampling.RandFloat64(-1, 1), 0)}
 		for i := n; i < len(vecBeforeBoot); i++ {vecBeforeBoot[i] = vecBeforeBoot[i%n]}
 		encoder.Encode(vecBeforeBoot, polyBeforeBoot)
