@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/cmplx"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -30,10 +31,10 @@ func main() {
 	fmt.Scanf("%d", &numBootRuns)
 
 	var logNumSlots int
-	fmt.Printf("Enter the number of slots (between 2**0 and 2**%d): 2**", logN-logSecretWeight-2)
+	fmt.Printf("Enter the number of slots (between 2**1 and 2**%d): 2**", logN-logSecretWeight-2)
 	fmt.Scanf("%d", &logNumSlots)
 	if logNumSlots > logN-logSecretWeight-2 {logNumSlots = logN - logSecretWeight - 2}
-	if logNumSlots < 0 {logNumSlots = 0}
+	if logNumSlots < 1 {logNumSlots = 1}
 
 	N := 1 << logN
 	n := 1 << logNumSlots
@@ -211,8 +212,8 @@ func main() {
 	fmt.Println(header)
 	fmt.Println(strings.Repeat("─", len(header)))
 
-	for run := range numBootRuns {
-		fmt.Printf("%3d | ", run+1)
+	for run := range numBootRuns+1 {
+		if run > 0 {fmt.Printf("%3d | ", run)} // Ignore the first run
 		for i := range n {vecBeforeBoot[i] = complex(sampling.RandFloat64(-1, 1), 0)}
 		for i := n; i < len(vecBeforeBoot); i++ {vecBeforeBoot[i] = vecBeforeBoot[i%n]}
 		encoder.Encode(vecBeforeBoot, polyBeforeBoot)
@@ -309,27 +310,32 @@ func main() {
 		timeSTC := t5.Sub(t4).Seconds()
 		timeBoot := t5.Sub(t0).Seconds()
 
-		totalEncoding += timeEncoding
-		totalCSProd += timeCSProd
-		totalTrace += timeTrace
-		totalProdTree += timeProdTree
-		totalSTC += timeSTC
-		totalBoot += timeBoot
+		if run > 0 {
+			totalEncoding += timeEncoding
+			totalCSProd += timeCSProd
+			totalTrace += timeTrace
+			totalProdTree += timeProdTree
+			totalSTC += timeSTC
+			totalBoot += timeBoot
 
-		encoder.Decode(decryptor.DecryptNew(ctBoot), vecBoot)
-		stats := ckks.GetPrecisionStats(params, encoder, nil, vecBeforeBoot, vecBoot, 0, false)
-		prec := stats.AVGLog2Prec.Real
-		totalPrec += prec
+			encoder.Decode(decryptor.DecryptNew(ctBoot), vecBoot)
+			stats := ckks.GetPrecisionStats(params, encoder, nil, vecBeforeBoot, vecBoot, 0, false)
+			prec := stats.AVGLog2Prec.Real
+			totalPrec += prec
 
-		fmt.Printf("%13.3f | %13.3f | %13.3f | %13.3f | %13.3f | %13.3f | %8.1f bits\n",
-			timeEncoding,
-			timeCSProd,
-			timeTrace,
-			timeProdTree,
-			timeSTC,
-			timeBoot,
-			prec,
-		)
+			fmt.Printf("%13.3f | %13.3f | %13.3f | %13.3f | %13.3f | %13.3f | %8.1f bits\n",
+				timeEncoding,
+				timeCSProd,
+				timeTrace,
+				timeProdTree,
+				timeSTC,
+				timeBoot,
+				prec,
+			)
+		}
+
+		runtime.GC()
+		debug.FreeOSMemory()
 	}
 
 	fmt.Println(strings.Repeat("─", len(header)))
@@ -369,8 +375,8 @@ func main() {
 	fmt.Println(header)
 	fmt.Println(strings.Repeat("─", len(header)))
 
-	for run := range numBootRuns {
-		fmt.Printf("%3d | ", run+1)
+	for run := range numBootRuns+1 {
+		if run > 0 {fmt.Printf("%3d | ", run)} // Ignore the first run
 		for i := range n {vecBeforeBoot[i] = complex(sampling.RandFloat64(-1, 1), 0)}
 		for i := n; i < len(vecBeforeBoot); i++ {vecBeforeBoot[i] = vecBeforeBoot[i%n]}
 		encoder.Encode(vecBeforeBoot, polyBeforeBoot)
@@ -463,27 +469,32 @@ func main() {
 		timeSCORE := t5.Sub(t4).Seconds()
 		timeBoot := t5.Sub(t0).Seconds()
 
-		totalEncoding += timeEncoding
-		totalCSProd += timeCSProd
-		totalTrace += timeTrace
-		totalProdTree += timeProdTree
-		totalSCORE += timeSCORE
-		totalBoot += timeBoot
+		if run > 0 {
+			totalEncoding += timeEncoding
+			totalCSProd += timeCSProd
+			totalTrace += timeTrace
+			totalProdTree += timeProdTree
+			totalSCORE += timeSCORE
+			totalBoot += timeBoot
 
-		encoder.Decode(decryptor.DecryptNew(ctBoot), vecBoot)
-		stats := ckks.GetPrecisionStats(params, encoder, nil, vecBeforeBoot, vecBoot, 0, false)
-		prec := stats.AVGLog2Prec.Real
-		totalPrec += prec
+			encoder.Decode(decryptor.DecryptNew(ctBoot), vecBoot)
+			stats := ckks.GetPrecisionStats(params, encoder, nil, vecBeforeBoot, vecBoot, 0, false)
+			prec := stats.AVGLog2Prec.Real
+			totalPrec += prec
 
-		fmt.Printf("%13.3f | %13.3f | %13.3f | %13.3f | %13.3f | %13.3f | %8.1f bits\n",
-			timeEncoding,
-			timeCSProd,
-			timeTrace,
-			timeProdTree,
-			timeSCORE,
-			timeBoot,
-			prec,
-		)
+			fmt.Printf("%13.3f | %13.3f | %13.3f | %13.3f | %13.3f | %13.3f | %8.1f bits\n",
+				timeEncoding,
+				timeCSProd,
+				timeTrace,
+				timeProdTree,
+				timeSCORE,
+				timeBoot,
+				prec,
+			)
+		}
+
+		runtime.GC()
+		debug.FreeOSMemory()
 	}
 
 	fmt.Println(strings.Repeat("─", len(header)))
@@ -518,7 +529,7 @@ func extendedBitReverse(x, logN int) int {
 	return res
 }
 
-// Computes exp(2*pi*i * x/q)
+// Computing exp(2*pi*i * x/q)
 func psi(x int64, q int64) complex128 {
 	return cmplx.Rect(1, 2*math.Pi*float64(x)/float64(q))
 }
