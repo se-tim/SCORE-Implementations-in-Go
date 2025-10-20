@@ -21,7 +21,7 @@ func main() {
 
 	// Parameters
 
-	logN := 13
+	logN := 15
 	numLevelsAfterBoot := 1
 	logSecretWeight := 6
 	
@@ -30,7 +30,7 @@ func main() {
 	fmt.Scanf("%d", &numBootRuns)
 
 	var logNumSlots int
-	fmt.Print("Enter the number of slots: 2**")
+	fmt.Printf("Enter the number of slots (between 2**0 and 2**%d): 2**", logN-logSecretWeight-2)
 	fmt.Scanf("%d", &logNumSlots)
 	if logNumSlots > logN-logSecretWeight-2 {logNumSlots = logN - logSecretWeight - 2}
 	if logNumSlots < 0 {logNumSlots = 0}
@@ -43,15 +43,14 @@ func main() {
 	Bover2n := 2 * Bover4n
 
 	logDefaultScale := 40
-	logBootScale := 60
+	logBootScale := 55
 	defaultScale := rlwe.NewScale(math.Exp2(float64(logDefaultScale)))
 	bootScale := rlwe.NewScale(math.Exp2(float64(logBootScale)))
 
 	logQBase := []int{53}
 	logQiAfterBoot := make([]int, numLevelsAfterBoot)
 	for i := range logQiAfterBoot {logQiAfterBoot[i] = logDefaultScale}
-	var logQiSlotsToCoeffs []int
-	if logNumSlots <= 6 {logQiSlotsToCoeffs = []int{39}} else {logQiSlotsToCoeffs = []int{39, 39}}
+	logQiSlotsToCoeffs := []int{39}
 	logQiRemaining := make([]int, 1+logSecretWeight+1) // For cs products, product tree, preparing STC
 	for i := range logQiRemaining {logQiRemaining[i] = logBootScale}
 
@@ -59,7 +58,7 @@ func main() {
 	logQ = append(logQ, logQiSlotsToCoeffs...)
 	logQ = append(logQ, logQiRemaining...)
 
-	logP := []int{61, 61, 61}
+	logP := []int{61}
 
 	logPQ_SPRU := 0
 	for _, Q := range logQ {logPQ_SPRU += Q}
