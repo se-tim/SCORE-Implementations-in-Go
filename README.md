@@ -32,17 +32,17 @@ Contains implementations and benchmarks
 comparing the SPRU bootstrapping procedure [2]
 with the SCORE-based variant [3].
 
-Supporting code:
+Supporting files:
 
 - **`lattigo-main/`**:
 A copy of [Lattigo](https://github.com/tuneinsight/lattigo)
-with modifications enabling SCORE and SPRU functionality.
-
-- **`CHANGES.md`**:
-A summary of all local modifications made to the Lattigo library.
+with minor modifications enabling SCORE and SPRU functionality.
 
 - **`go.mod` and `go.sum`**:
 Standard Go module files managing dependencies and build configuration.
+
+- **`CHANGES.md`**:
+A summary of all modifications made to the Lattigo library.
 
 ## Usage
 
@@ -72,5 +72,6 @@ go run ./spru_tests
    *Low-Latency Bootstrapping for CKKS using Roots of Unity*, 2025.  
    https://eprint.iacr.org/2025/651.
 
-3. Author(s) anonymous for review.  
-   *SCORE: A SlotToCoeff Optimization for Real-Vector Encryption in CKKS*, 2025.
+3. Tim Seuré.  
+   *SCORE: A SlotToCoeff Optimization for Real-Vector Encryption in CKKS*, 2025.  
+   Link to be added.

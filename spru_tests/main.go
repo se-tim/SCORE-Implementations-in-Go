@@ -48,7 +48,7 @@ func main() {
 	defaultScale := rlwe.NewScale(math.Exp2(float64(logDefaultScale)))
 	bootScale := rlwe.NewScale(math.Exp2(float64(logBootScale)))
 
-	logQBase := []int{53}
+	logQBase := []int{55}
 	logQiAfterBoot := make([]int, numLevelsAfterBoot)
 	for i := range logQiAfterBoot {logQiAfterBoot[i] = logDefaultScale}
 	logQiSlotsToCoeffs := []int{39}
