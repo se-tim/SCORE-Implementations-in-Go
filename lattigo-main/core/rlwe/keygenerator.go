@@ -96,13 +96,6 @@ func (kgen KeyGenerator) GenKeyPairNew() (sk *SecretKey, pk *PublicKey) {
 	return
 }
 
-// GenSPRUSecretKeyNew generates a [SecretKey] for SPRU.
-func (kgen KeyGenerator) GenSPRUSecretKeyNew(secretWeight int) (sk *SecretKey) {
-	sk = NewSecretKey(kgen.params)
-	kgen.GenSPRUSecretKey(secretWeight, sk)
-	return
-}
-
 // See above.
 func (kgen KeyGenerator) GenSPRUSecretKey(secretWeight int, sk *SecretKey) {
 	ringQP := kgen.params.RingQP().AtLevel(sk.LevelQ(), sk.LevelP())

@@ -48,7 +48,7 @@ func main() {
 	defaultScale := rlwe.NewScale(math.Exp2(float64(logDefaultScale)))
 	bootScale := rlwe.NewScale(math.Exp2(float64(logBootScale)))
 
-	logQBase := []int{55}
+	logQBase := []int{53}
 	logQiAfterBoot := make([]int, numLevelsAfterBoot)
 	for i := range logQiAfterBoot {logQiAfterBoot[i] = logDefaultScale}
 	logQiSlotsToCoeffs := []int{39}
@@ -232,18 +232,18 @@ func main() {
 		for u := range (4*n) {
 			e := make([]complex128, N/2)
 			for a := range (2*n) {
-				k := a * N / (2 * n)
+				l := a * N / (2 * n)
 				for b := range secretWeight {
-					for l := range Bover4n {
-						i := 2*l*n*secretWeight + 2*b*n + a
-						j := b*B + u*Bover4n + l
+					for k := range Bover4n {
+						i := 2*k*n*secretWeight + 2*b*n + a
+						j := b*B + u*Bover4n + k
 						var entry int64
 						if j == 0 {
-							entry = int64(c0_INTT.Coeffs[0][k] + c1_INTT.Coeffs[0][k])
-						} else if j <= k {
-							entry = int64(c1_INTT.Coeffs[0][k-j])
+							entry = int64(c0_INTT.Coeffs[0][l] + c1_INTT.Coeffs[0][l])
+						} else if j <= l {
+							entry = int64(c1_INTT.Coeffs[0][l-j])
 						} else {
-							entry = baseQ - int64(c1_INTT.Coeffs[0][k-j+N])
+							entry = baseQ - int64(c1_INTT.Coeffs[0][l-j+N])
 						}
 						e[extendedBitReverse(i, logNumSlots)] = expScale * psi(entry, baseQ)
 					}

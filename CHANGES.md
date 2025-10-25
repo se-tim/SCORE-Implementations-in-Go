@@ -23,5 +23,4 @@ All modifications are summarized here; the original files remain unaltered elsew
 **`core/rlwe/keygenerator.go`**:
 - Added SPRU key generation helpers:
   - `KeyGenerator.GenSPRUSecretKeyNew()`
-  - `KeyGenerator.GenSPRUSecretKey()`
   - `KeyGenerator.GenSPRUPairNew()`
