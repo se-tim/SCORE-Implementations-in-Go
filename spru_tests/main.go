@@ -168,7 +168,7 @@ func main() {
 	baseQ := int64(params.Q()[0])
 
 	logExpScale := float64(logQBase[0]) - float64(logBootScale) - math.Log2(4*math.Pi)
-	expScale := complex(math.Exp2(logExpScale / float64(secretWeight)), 0) / 2 // Called delta in paper
+	expScale := complex(math.Exp2(logExpScale / float64(secretWeight)), 0) // Called delta in paper
 
 	maskVec := make([]complex128, N/2)
 	for i := range (N/2) {if (i/n)%2 == 0 {maskVec[i] = 1} else {maskVec[i] = 1i}}
@@ -270,7 +270,7 @@ func main() {
 
 		t2 := time.Now()
 
-		for i := N/2; i >= 2 * n * secretWeight; i /= 2 {
+		for i := N/4; i >= 2 * n * secretWeight; i /= 2 {
 			ctRot, _ := defaultEval.RotateNew(ctBoot, i)
 			ctBoot, _ = defaultEval.AddNew(ctBoot, ctRot)
 		}
@@ -433,7 +433,7 @@ func main() {
 
 		t2 := time.Now()
 
-		for i := N/2; i >= n * secretWeight; i /= 2 {
+		for i := N/4; i >= n * secretWeight; i /= 2 {
 			ctRot, _ := defaultEval.RotateNew(ctBoot, i)
 			ctBoot, _ = defaultEval.AddNew(ctBoot, ctRot)
 		}
