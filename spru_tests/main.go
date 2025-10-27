@@ -125,7 +125,7 @@ func main() {
 
 	csEncryptions_SPRU := make([]*rlwe.Ciphertext, 4*n)
 	for u := range (4*n) {
-		s := make([]complex128, 1<<(logN-1))
+		s := make([]complex128, N/2)
 		for a := range (2*n) {
 			for b := range secretWeight {
 				for k := range Bover4n {
