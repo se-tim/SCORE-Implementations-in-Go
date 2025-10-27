@@ -146,7 +146,7 @@ func main() {
 
 	csEncryptions_RSPRU := make([]*rlwe.Ciphertext, 2*n)
 	for u := range (2*n) {
-		s := make([]complex128, 1<<(logN-1))
+		s := make([]complex128, N/2)
 		for a := range n {
 			for b := range secretWeight {
 				for k := range Bover2n {
