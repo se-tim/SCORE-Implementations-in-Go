@@ -10,7 +10,7 @@ All modifications are summarized here; the original files remain unaltered elsew
 
 **`circuits/ckks/bootstrapping/evaluator.go`**:
 - Added `SCOREMatrix` field to `Evaluator`.
-- Added new constructor `NewSlotsToCoeffsEvaluator()` to create an evaluator for both SlotsToCoeffs and SCORE.
+- Added new constructors `NewSlotsToCoeffsEvaluator()` and `NewSCOREEvaluator()` to create evaluators for SlotsToCoeffs and SCORE.
 - Updated `Evaluator.initialize()` to build SCORE matrices when the parameters are set.
 - Added new method `Evaluator.SCORE()` for SCORE transformation.
 

@@ -22,7 +22,7 @@ func main() {
 
 	// Parameters
 
-	logN := 15
+	logN := 13
 	numLevelsAfterBoot := 1
 	logSecretWeight := 6
 	
@@ -52,7 +52,7 @@ func main() {
 	logQiAfterBoot := make([]int, numLevelsAfterBoot)
 	for i := range logQiAfterBoot {logQiAfterBoot[i] = logDefaultScale}
 	logQiSlotsToCoeffs := []int{39}
-	logQiRemaining := make([]int, 1+logSecretWeight+1) // For cs products, product tree, preparing STC
+	logQiRemaining := make([]int, logSecretWeight+1) // For product tree and cs products
 	for i := range logQiRemaining {logQiRemaining[i] = logBootScale}
 
 	logQ := append(logQBase, logQiAfterBoot...)
@@ -61,17 +61,15 @@ func main() {
 
 	logP := []int{61}
 
-	logPQ_SPRU := 0
-	for _, Q := range logQ {logPQ_SPRU += Q}
-	for _, P := range logP {logPQ_SPRU += P}
-	logPQ_RSPRU := logPQ_SPRU - logBootScale // No preparation for SCORE required
+	logPQ := 0
+	for _, Q := range logQ {logPQ += Q}
+	for _, P := range logP {logPQ += P}
 
 	println()
-	fmt.Printf("logN = %d, logNumSlots = %d, logPQ_SPRU = %d, logPQ_RSPRU = %d, logQBeforeBoot = %d, logQAfterBoot = %d\n\n",
+	fmt.Printf("logN = %d, logNumSlots = %d, logPQ = %d, logQBeforeBoot = %d, logQAfterBoot = %d\n\n",
 		logN,
 		logNumSlots,
-		logPQ_SPRU,
-		logPQ_RSPRU,
+		logPQ,
 		logQBase[0],
 		logQBase[0] + logDefaultScale * numLevelsAfterBoot,
 	)
@@ -86,17 +84,33 @@ func main() {
 
 	SlotsToCoeffsParameters := dft.MatrixLiteral{
 		Type: dft.HomomorphicDecode,
+		Format: dft.RepackImagAsReal,
 		LogSlots: logNumSlots,
 		LevelQ: numLevelsAfterBoot + len(logQiSlotsToCoeffs),
 		LevelP: params.MaxLevelP(),
 		Levels: make([]int, len(logQiSlotsToCoeffs)),
-	} // Also for SCORE
+	}
 	for i := range SlotsToCoeffsParameters.Levels {SlotsToCoeffsParameters.Levels[i] = 1}
-	
-	bootParams := bootstrapping.Parameters{
+
+	SCOREParameters := dft.MatrixLiteral{
+		Type: dft.HomomorphicDecode,
+		LogSlots: logNumSlots,
+		LevelQ: numLevelsAfterBoot + len(logQiSlotsToCoeffs),
+		LevelP: params.MaxLevelP(),
+		Levels: make([]int, len(logQiSlotsToCoeffs)),
+	}
+	for i := range SCOREParameters.Levels {SCOREParameters.Levels[i] = 1}
+
+	bootParams_SPRU := bootstrapping.Parameters{
 		ResidualParameters: params,
 		BootstrappingParameters: params,
 		SlotsToCoeffsParameters: SlotsToCoeffsParameters,
+	}
+
+	bootParams_RSPRU := bootstrapping.Parameters{
+		ResidualParameters: params,
+		BootstrappingParameters: params,
+		SlotsToCoeffsParameters: SCOREParameters,
 	}
 
 	// Key generation & alike
@@ -107,8 +121,11 @@ func main() {
 	encoder := ckks.NewEncoder(params)
 	encryptor := rlwe.NewEncryptor(params, pk)
 	decryptor := rlwe.NewDecryptor(params, sk)
-	evk, _, _ := bootParams.GenEvaluationKeys(sk)
-	eval, _ := bootstrapping.NewSlotsToCoeffsEvaluator(bootParams, evk)
+
+	evk_SPRU, _, _ := bootParams_SPRU.GenEvaluationKeys(sk)
+	eval_SPRU, _ := bootstrapping.NewSlotsToCoeffsEvaluator(bootParams_SPRU, evk_SPRU)
+	evk_RSPRU, _, _ := bootParams_RSPRU.GenEvaluationKeys(sk)
+	eval_RSPRU, _ := bootstrapping.NewSCOREEvaluator(bootParams_RSPRU, evk_RSPRU)
 
 	galoisElem := make([]uint64, logN+1) // For rotations and conjugation
 	for i := range logN {galoisElem[i] = params.GaloisElementForRotation(1 << i)}
@@ -156,7 +173,7 @@ func main() {
 				}
 			}
 		}
-		sPoly := ckks.NewPlaintext(params, params.MaxLevel()-1)
+		sPoly := ckks.NewPlaintext(params, params.MaxLevel())
 		sPoly.Scale = rlwe.NewScale(math.Exp2(float64(logBootScale)))
 		encoder.Encode(s, sPoly)
 		cs, _ := encryptor.EncryptNew(sPoly)
@@ -169,12 +186,6 @@ func main() {
 
 	logExpScale := float64(logQBase[0]) - float64(logBootScale) - math.Log2(4*math.Pi)
 	expScale := complex(math.Exp2(logExpScale / float64(secretWeight)), 0) // Called delta in paper
-
-	maskVec := make([]complex128, N/2)
-	for i := range (N/2) {if (i/n)%2 == 0 {maskVec[i] = 1} else {maskVec[i] = 1i}}
-	maskPoly := ckks.NewPlaintext(params, params.MaxLevel())
-	maskPoly.Scale = bootScale
-	encoder.Encode(maskVec, maskPoly) // Required before applying SlotsToCoeffs in SPRU
 	
 	// Test
 
@@ -291,12 +302,8 @@ func main() {
 
 		ctConj, _ := defaultEval.ConjugateNew(ctBoot)
 		ctBoot, _ = defaultEval.SubNew(ctBoot, ctConj)
-		eval.Mul(ctBoot, -1i, ctBoot) // Division by imaginary unit
-		defaultEval.Mul(ctBoot, maskPoly, ctBoot)
-		defaultEval.Rescale(ctBoot, ctBoot)
-		ctRot, _ := defaultEval.RotateNew(ctBoot, n)
-		ctBoot, _ = defaultEval.AddNew(ctBoot, ctRot)
-		ctBoot, _ = eval.SlotsToCoeffs(ctBoot, nil)
+		eval_SPRU.Mul(ctBoot, -1i, ctBoot) // Division by imaginary unit
+		ctBoot, _ = eval_SPRU.SlotsToCoeffs(ctBoot, nil)
 		ctBoot.Scale = defaultScale
 
 		// Computing the timings
@@ -454,9 +461,9 @@ func main() {
 
 		ctConj, _ := defaultEval.ConjugateNew(ctBoot)
 		ctBoot, _ = defaultEval.SubNew(ctBoot, ctConj)
-		eval.Mul(ctBoot, -1i, ctBoot) // Division by imaginary unit
-		ctBoot, _ = eval.SCORE(ctBoot)
-		ctBoot.Scale = rlwe.NewScale(math.Exp2(float64(logDefaultScale)))
+		eval_RSPRU.Mul(ctBoot, -1i, ctBoot) // Division by imaginary unit
+		ctBoot, _ = eval_RSPRU.SCORE(ctBoot)
+		ctBoot.Scale = defaultScale
 
 		// Computing the timings
 

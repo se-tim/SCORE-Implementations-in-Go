@@ -131,7 +131,7 @@ func NewEvaluator(btpParams Parameters, evk *EvaluationKeys) (eval *Evaluator, e
 	return
 }
 
-// NewSlotsToCoeffsEvaluator creates an Evaluator initialized for both SlotsToCoeffs and SCORE transformations.
+// NewSlotsToCoeffsEvaluator creates an Evaluator initialized only for SlotsToCoeffs.
 func NewSlotsToCoeffsEvaluator(btpParams Parameters, evk *EvaluationKeys) (*Evaluator, error) {
     var err error
     eval := &Evaluator{}
@@ -154,6 +154,31 @@ func NewSlotsToCoeffsEvaluator(btpParams Parameters, evk *EvaluationKeys) (*Eval
     if eval.S2CDFTMatrix, err = dft.NewMatrixFromLiteral(params, eval.SlotsToCoeffsParameters, encoder); err != nil {
         return nil, err
     }
+
+    eval.pool = rlwe.NewPool(params.RingQP())
+
+    return eval, nil
+}
+
+// NewSCOREEvaluator creates an Evaluator initialized only for SCORE.
+func NewSCOREEvaluator(btpParams Parameters, evk *EvaluationKeys) (*Evaluator, error) {
+    var err error
+    eval := &Evaluator{}
+    eval.Parameters = btpParams
+
+    params := btpParams.BootstrappingParameters
+
+    eval.EvaluationKeys = evk
+    eval.Evaluator = ckks.NewEvaluator(params, evk)
+    eval.DFTEvaluator = dft.NewEvaluator(params, eval.Evaluator)
+
+    if btpParams.SlotsToCoeffsParameters.Scaling == nil {
+        eval.SlotsToCoeffsParameters.Scaling = new(big.Float).SetFloat64(1.0)
+    } else {
+        eval.SlotsToCoeffsParameters.Scaling = btpParams.SlotsToCoeffsParameters.Scaling
+    }
+
+    encoder := ckks.NewEncoder(params)
 
     scoreLit := eval.SlotsToCoeffsParameters
     scoreLit.SCORE = &dft.SCOREOptions{DecodeHalfScale: true}
