@@ -22,7 +22,7 @@ func main() {
 
 	// Parameters
 
-	logN := 13
+	logN := 15
 	numLevelsAfterBoot := 1
 	logSecretWeight := 6
 	
@@ -402,18 +402,18 @@ func main() {
 		for u := range (2*n) {
 			e := make([]complex128, N/2)
 			for a := range n {
-				k := a * N / (2 * n)
+				l := a * N / (2 * n)
 				for b := range secretWeight {
-					for l := range Bover2n {
-						i := l*n*secretWeight + b*n + a
-						j := b*B + u*Bover2n + l
+					for k := range Bover2n {
+						i := k*n*secretWeight + b*n + a
+						j := b*B + u*Bover2n + k
 						var entry int64
 						if j == 0 {
-							entry = int64(c0_INTT.Coeffs[0][k] + c1_INTT.Coeffs[0][k])
-						} else if j <= k {
-							entry = int64(c1_INTT.Coeffs[0][k-j])
+							entry = int64(c0_INTT.Coeffs[0][l] + c1_INTT.Coeffs[0][l])
+						} else if j <= l {
+							entry = int64(c1_INTT.Coeffs[0][l-j])
 						} else {
-							entry = baseQ - int64(c1_INTT.Coeffs[0][k-j+N])
+							entry = baseQ - int64(c1_INTT.Coeffs[0][l-j+N])
 						}
 						e[extendedBitReverse(i, logNumSlots)] = expScale * psi(entry, baseQ)
 					}
