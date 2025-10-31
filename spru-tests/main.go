@@ -22,7 +22,7 @@ func main() {
 
 	// Parameters
 
-	logN := 15
+	logN := 12
 	numLevelsAfterBoot := 1
 	logSecretWeight := 6
 	
@@ -174,7 +174,7 @@ func main() {
 			}
 		}
 		sPoly := ckks.NewPlaintext(params, params.MaxLevel())
-		sPoly.Scale = rlwe.NewScale(math.Exp2(float64(logBootScale)))
+		sPoly.Scale = bootScale
 		encoder.Encode(s, sPoly)
 		cs, _ := encryptor.EncryptNew(sPoly)
 		csEncryptions_RSPRU[u] = cs
@@ -420,7 +420,7 @@ func main() {
 				}
 			}
 			ePoly := ckks.NewPlaintext(params, params.MaxLevel())
-			ePoly.Scale = rlwe.NewScale(math.Exp2(float64(logBootScale)))
+			ePoly.Scale = bootScale
 			encoder.Encode(e, ePoly)
 			eEncodings[u] = ePoly
 		}
