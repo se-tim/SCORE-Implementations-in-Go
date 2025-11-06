@@ -96,7 +96,7 @@ func (kgen KeyGenerator) GenKeyPairNew() (sk *SecretKey, pk *PublicKey) {
 	return
 }
 
-// See above.
+// GenSPRUSecretKey generates a [SecretKey] with exactly secretWeight non-zero coefficients.
 func (kgen KeyGenerator) GenSPRUSecretKey(secretWeight int, sk *SecretKey) {
 	ringQP := kgen.params.RingQP().AtLevel(sk.LevelQ(), sk.LevelP())
 	ringQ := ringQP.RingQ

@@ -22,7 +22,7 @@ func main() {
 
 	// Parameters
 
-	logN := 12
+	logN := 15
 	numLevelsAfterBoot := 1
 	logSecretWeight := 6
 	
