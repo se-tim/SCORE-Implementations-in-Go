@@ -74,4 +74,4 @@ go run ./spru_tests
 
 3. Tim Seuré.  
    *SCORE: A SlotToCoeff Optimization for Real-Vector Encryption in CKKS*, 2025.  
-   Link to be added.
+   https://eprint.iacr.org/2025/1983.
